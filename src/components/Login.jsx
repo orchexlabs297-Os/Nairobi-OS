@@ -26,48 +26,63 @@ export default function Login({ onAuthed }) {
   }
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-7 ring-1 ring-slate-200/70 shadow-sm">
-        <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-bold shadow-sm">N</div>
-          <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Centro Administrativo</p>
-          <h1 className="text-lg font-semibold text-slate-800">Nairobi OS</h1>
-          <p className="mt-1 flex items-center gap-1 text-xs text-slate-400"><Lock size={12} /> Acceso privado — solo personal autorizado</p>
+    <div className="relative flex h-screen w-full items-center justify-center overflow-hidden bg-slate-50 px-4">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-72 -left-72 h-[620px] w-[620px] rotate-45 bg-gradient-to-br from-blue-700 to-blue-400 opacity-90" />
+        <div className="absolute -bottom-72 -right-72 h-[620px] w-[620px] rotate-45 bg-gradient-to-tr from-blue-900 to-blue-600 opacity-90" />
+        <div className="absolute inset-0 bg-white/50" />
+      </div>
+
+      <div className="relative w-full max-w-sm">
+        <div className="overflow-hidden rounded-3xl bg-white shadow-xl ring-1 ring-slate-200/70">
+          <div className="relative flex flex-col items-center bg-gradient-to-br from-blue-700 via-blue-600 to-blue-800 pb-14 pt-10 text-center text-white">
+            <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white/30">
+              <img src="/branding/logo_nairobi_montilla.png" alt="Nairobi Montilla" className="h-full w-full object-cover" />
+            </div>
+            <h1 className="mt-4 text-xl font-semibold">Bienvenida Nairobi</h1>
+            <p className="mt-1 text-xs font-medium uppercase tracking-wider text-blue-100">Corredor de Seguros · Centro Administrativo</p>
+          </div>
+
+          <div className="-mt-8 rounded-t-3xl bg-white px-7 pb-7 pt-6">
+            <p className="mb-4 flex items-center justify-center gap-1 text-xs text-slate-400">
+              <Lock size={12} /> Acceso privado — solo personal autorizado
+            </p>
+
+            {!isSupabaseConfigured && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-700 ring-1 ring-amber-200">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                Falta configurar Supabase. Copia <code className="rounded bg-amber-100 px-1">.env.example</code> a <code className="rounded bg-amber-100 px-1">.env</code> con tu URL y anon key.
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5">
+                <Mail size={15} className="text-blue-500" />
+                <input
+                  type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                  placeholder="tucorreo@agencia.com"
+                  className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5">
+                <KeyRound size={15} className="text-blue-500" />
+                <input
+                  type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Contraseña"
+                  className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+                />
+              </div>
+              {error && <p className="text-xs text-red-500">{error}</p>}
+              <button
+                type="submit" disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 py-3 text-sm font-semibold text-white shadow-md shadow-blue-600/30 transition hover:from-blue-700 hover:to-blue-800 disabled:opacity-60"
+              >
+                {loading && <Loader2 size={15} className="animate-spin" />}
+                Iniciar sesión
+              </button>
+            </form>
+          </div>
         </div>
-
-        {!isSupabaseConfigured && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-700 ring-1 ring-amber-200">
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-            Falta configurar Supabase. Copia <code className="rounded bg-amber-100 px-1">.env.example</code> a <code className="rounded bg-amber-100 px-1">.env</code> con tu URL y anon key.
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5">
-            <Mail size={15} className="text-slate-400" />
-            <input
-              type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="tucorreo@agencia.com"
-              className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5">
-            <KeyRound size={15} className="text-slate-400" />
-            <input
-              type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="Contraseña"
-              className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
-            />
-          </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          <button
-            type="submit" disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
-          >
-            {loading && <Loader2 size={15} className="animate-spin" />}
-            Iniciar sesión
-          </button>
-        </form>
 
         <p className="mt-5 text-center text-[11px] text-slate-400">
           Los usuarios se crean desde el panel de Supabase (Authentication → Users) de tu proyecto. No hay registro público.
