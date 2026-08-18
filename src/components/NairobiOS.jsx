@@ -31,118 +31,28 @@ const NAV = [
   { id: "configuracion", label: "Configuración", icon: Settings },
 ];
 
-const REVENUE_TREND = [
-  { mes: "Mar", ingresos: 6200, gastos: 2100 },
-  { mes: "Abr", ingresos: 7400, gastos: 2400 },
-  { mes: "May", ingresos: 6900, gastos: 2200 },
-  { mes: "Jun", ingresos: 9100, gastos: 2600 },
-  { mes: "Jul", ingresos: 11800, gastos: 3100 },
-  { mes: "Ago", ingresos: 15300, gastos: 3900 },
-];
+// Nota: la plataforma no contiene datos de ejemplo/ficticios. Estas listas
+// arrancan vacías y se alimentan de Supabase (o quedan en 0 / "Sin datos")
+// hasta que existan registros reales.
+const REVENUE_TREND = [];
 
-const INSURERS = [
-  { name: "Seguros Andes", polizas: 37, ingreso: 15300, comision: 17500, rendimiento: 12, color: "#2563eb" },
-  { name: "Aseguradora Continental", polizas: 30, ingreso: 14200, comision: 12300, rendimiento: 6, color: "#0ea5e9" },
-  { name: "Aseguradora Horizonte", polizas: 29, ingreso: 13300, comision: 16200, rendimiento: -3, color: "#6366f1" },
-  { name: "Aseguradora Del Valle", polizas: 23, ingreso: 11100, comision: 15100, rendimiento: 4, color: "#0d9488" },
-  { name: "Aseguradora Pacífico", polizas: 24, ingreso: 10700, comision: 13100, rendimiento: -1, color: "#7c3aed" },
-];
+const INSURERS = [];
 
-const QUOTE_INSURERS = [
-  { key: "A", name: "Seguros Andes", price: "$412", coverage: "Full", commission: "18%", score: 92, rec: "Alta Probabilidad" },
-  { key: "B", name: "Continental", price: "$465", coverage: "Full", commission: "14%", score: 75, rec: "73%" },
-  { key: "C", name: "Horizonte", price: "$530", coverage: "Premium", commission: "20%", score: 88, rec: "75%" },
-  { key: "D", name: "Del Valle", price: "$399", coverage: "Básica", commission: "12%", score: 87, rec: "70%" },
-  { key: "E", name: "Pacífico", price: "$408", coverage: "Full", commission: "15%", score: 61, rec: "71%" },
-  { key: "F", name: "Zenith", price: "$449", coverage: "Full", commission: "16%", score: 72, rec: "70%" },
-  { key: "H", name: "Fénix", price: "$561", coverage: "Premium", commission: "19%", score: 89, rec: "70%" },
-  { key: "I", name: "Meridian", price: "$405", coverage: "Full", commission: "17%", score: 93, rec: "70%" },
-];
+const QUOTE_INSURERS = [];
 
-const CLIENTS = [
-  { name: "Carlos Rodríguez", phone: "+44 585-9837-0300", email: "carlos.rod@mail.com", polizas: 3, estado: "Activo", ultimo: "Hoy, 11:00 AM" },
-  { name: "Carlos Fringes", phone: "+44 585-2210-9931", email: "c.fringes@mail.com", polizas: 1, estado: "Prospecto", ultimo: "Ayer, 3:06 PM" },
-  { name: "Marina López", phone: "+44 771-4420-1187", email: "marina.lopez@mail.com", polizas: 2, estado: "Activo", ultimo: "Hoy, 10:00 AM" },
-  { name: "Carlos Nanta", phone: "+131-256-6773", email: "tanainfo@mail.com", polizas: 4, estado: "Activo", ultimo: "Hoy, 7:59 AM" },
-  { name: "Carlos Sonorz", phone: "+44 902-1120-4471", email: "sonorz@mail.com", polizas: 1, estado: "Prospecto", ultimo: "Ayer, 6:12 PM" },
-  { name: "Carlos Marca", phone: "+44 337-8820-0091", email: "marca@mail.com", polizas: 2, estado: "Escalado", ultimo: "Hoy, 7:00 AM" },
-];
+const CLIENTS = [];
 
-const POLICIES = [
-  { id: "#POL-2201", cliente: "Carlos Rodríguez", tipo: "Colisión RCV", aseguradora: "Seguros Andes", prima: "$1,240/año", renovacion: "12 Sep 2026", estado: "Activa" },
-  { id: "#POL-2202", cliente: "Marina López", tipo: "Cobertura Global", aseguradora: "Aseguradora Continental", prima: "$980/año", renovacion: "03 Sep 2026", estado: "Por Vencer" },
-  { id: "#POL-2203", cliente: "Carlos Nanta", tipo: "Daño al Hogar", aseguradora: "Aseguradora Horizonte", prima: "$1,560/año", renovacion: "28 Oct 2026", estado: "Activa" },
-  { id: "#POL-2204", cliente: "Carlos Fringes", tipo: "Colisión RCV", aseguradora: "Aseguradora Del Valle", prima: "$870/año", renovacion: "18 Ago 2026", estado: "Por Vencer" },
-  { id: "#POL-2205", cliente: "Carlos Sonorz", tipo: "Cobertura Global", aseguradora: "Aseguradora Pacífico", prima: "$1,110/año", renovacion: "05 Dic 2026", estado: "Activa" },
-];
+const POLICIES = [];
 
-const CLAIMS = [
-  { cliente: "Carlos Rodríguez", poliza: "#9837-301", tipo: "Colisión RCV", aseguradora: "Seguros Andes", fecha: "29/11/2025", estado: "Nuevo", prioridad: "Alta" },
-  { cliente: "Carlos Rodríguez", poliza: "#9837-302", tipo: "Daño al Hogar", aseguradora: "Aseguradora Continental", fecha: "29/11/2025", estado: "En Revisión", prioridad: "Alta" },
-  { cliente: "Carlos Fringes", poliza: "#9837-304", tipo: "Daño al Hogar", aseguradora: "Seguros Andes", fecha: "29/11/2025", estado: "Documentación Pendiente", prioridad: "Alta" },
-  { cliente: "Carlos Rodríguez", poliza: "#9837-395", tipo: "Colisión RCV", aseguradora: "Aseguradora Continental", fecha: "29/11/2025", estado: "Documentación Pendiente", prioridad: "Alta" },
-  { cliente: "Carlos Fringes", poliza: "#9837-396", tipo: "Daño al Hogar", aseguradora: "Aseguradora Continental", fecha: "29/11/2025", estado: "En Proceso", prioridad: "Alta" },
-  { cliente: "Carlos Rodríguez", poliza: "#9837-397", tipo: "Daño al Hogar", aseguradora: "Aseguradora Continental", fecha: "29/11/2025", estado: "En Proceso", prioridad: "Alta" },
-  { cliente: "Carlos Rodríguez", poliza: "#9837-400", tipo: "Colisión RCV", aseguradora: "Seguros Andes", fecha: "29/11/2025", estado: "Resuelto", prioridad: "Alta" },
-  { cliente: "Carlos Rodríguez", poliza: "#9837-401", tipo: "Colisión RCV", aseguradora: "Aseguradora Continental", fecha: "29/11/2025", estado: "Resuelto", prioridad: "Alta" },
-  { cliente: "Carlos Fringes", poliza: "#9837-493", tipo: "Daño al Hogar", aseguradora: "Seguros Andes", fecha: "27/11/2025", estado: "Urgente", prioridad: "Alta" },
-];
+const CLAIMS = [];
 
-const CONVERSATIONS = [
-  {
-    id: 1, cliente: "Carlos Rodríguez", canal: "WhatsApp", estado: "Urgente", hora: "11:00 AM",
-    resumen: "Solicitud de cotización RCV", prob: 90,
-    thread: [
-      { from: "client", text: "Hola, quisiera cotizar un seguro de auto para mi vehículo nuevo." },
-      { from: "nai", text: "Nai identificó: solicitud de cotización RCV. Probabilidad comercial 90%." },
-      { from: "agent", text: "Claro Carlos, en un momento te comparto las opciones disponibles." },
-      { from: "nai", text: "Sugerencia: revisar cotización adjunta y responder sobre cobertura." },
-    ],
-  },
-  {
-    id: 2, cliente: "Carlos Fringes", canal: "WhatsApp", estado: "En Proceso", hora: "10:30 AM",
-    resumen: "Renovación de póliza de hogar", prob: 68,
-    thread: [
-      { from: "client", text: "¿Ya está lista la renovación de mi póliza de hogar?" },
-      { from: "nai", text: "Nai detectó intención de renovación. Póliza #POL-2204 vence en 4 días." },
-    ],
-  },
-  {
-    id: 3, cliente: "Marina López", canal: "WhatsApp", estado: "Nuevo", hora: "9:12 AM",
-    resumen: "Consulta sobre cobertura de salud", prob: 54,
-    thread: [
-      { from: "client", text: "Buenos días, ¿qué cubre el plan de salud premium?" },
-      { from: "nai", text: "Nai recomienda enviar folleto comparativo de planes de salud." },
-    ],
-  },
-  {
-    id: 4, cliente: "Carlos Nanta", canal: "WhatsApp", estado: "En Proceso", hora: "7:59 AM",
-    resumen: "Seguimiento de siniestro #9837-397", prob: 40,
-    thread: [
-      { from: "client", text: "¿Alguna novedad con mi siniestro?" },
-      { from: "nai", text: "Nai detectó siniestro en espera de resolución de aseguradora." },
-    ],
-  },
-];
+const CONVERSATIONS = [];
 
-const APPOINTMENTS = [
-  { hora: "10:00 AM", cliente: "Mariana López", tipo: "Renovación RCV", modo: "Llamada" },
-  { hora: "12:30 PM", cliente: "Carlos Nanta", tipo: "Revisión de siniestro", modo: "Video" },
-  { hora: "3:00 PM", cliente: "Carlos Fringes", tipo: "Firma de póliza", modo: "Presencial" },
-  { hora: "5:15 PM", cliente: "Marina López", tipo: "Consulta de cobertura", modo: "Llamada" },
-];
+const APPOINTMENTS = [];
 
-const COLLECTIONS = [
-  { cliente: "Carlos Rodríguez", poliza: "#POL-2201", monto: "$103.00", vence: "18 Ago 2026", estado: "Próximo" },
-  { cliente: "Marina López", poliza: "#POL-2202", monto: "$81.00", vence: "22 Ago 2026", estado: "Próximo" },
-  { cliente: "Carlos Fringes", poliza: "#POL-2204", monto: "$72.50", vence: "10 Ago 2026", estado: "Vencido" },
-  { cliente: "Carlos Nanta", poliza: "#POL-2203", monto: "$130.00", vence: "05 Ago 2026", estado: "Vencido" },
-  { cliente: "Carlos Sonorz", poliza: "#POL-2205", monto: "$92.50", vence: "29 Ago 2026", estado: "Próximo" },
-];
+const COLLECTIONS = [];
 
-const COMMISSIONS = INSURERS.map((i) => ({
-  aseguradora: i.name, acumulada: i.comision, pendiente: Math.round(i.comision * 0.18), tasa: `${10 + (i.polizas % 8)}%`,
-}));
+const COMMISSIONS = [];
 
 /* --------------------------------- HELPERS --------------------------------- */
 
@@ -168,6 +78,18 @@ function StatusBadge({ status }) {
     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${cls}`}>
       {status}
     </span>
+  );
+}
+
+function EmptyState({ icon: Icon = CircleDot, title = "Sin datos todavía", subtitle = "Esta sección se llenará automáticamente cuando existan registros reales." }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 py-10 text-center">
+      <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-50 text-slate-300">
+        <Icon size={17} />
+      </div>
+      <p className="text-sm font-medium text-slate-500">{title}</p>
+      <p className="max-w-xs text-xs text-slate-400">{subtitle}</p>
+    </div>
   );
 }
 
@@ -310,7 +232,7 @@ function Sidebar({ active, setActive, open, setOpen }) {
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
             <Bot size={14} className="text-indigo-500" /> Nai Agente
           </div>
-          <p className="mt-1 text-[11px] leading-snug text-slate-400">Supervisando 4 flujos activos vía n8n.</p>
+          <p className="mt-1 text-[11px] leading-snug text-slate-400">Supervisando flujos vía n8n.</p>
         </div>
       </aside>
     </>
@@ -318,7 +240,7 @@ function Sidebar({ active, setActive, open, setOpen }) {
 }
 
 function TopBar({ title, onMenu, userEmail, onSignOut }) {
-  const initials = (userEmail || "Tiana Nairobi")
+  const initials = (userEmail || "Usuario")
     .split(/[@ ]/)[0]
     .split(/[.\s]/)
     .map((s) => s[0])
@@ -343,7 +265,7 @@ function TopBar({ title, onMenu, userEmail, onSignOut }) {
         </button>
         <div className="flex items-center gap-2 rounded-full bg-slate-50 py-1 pl-1 pr-1 ring-1 ring-slate-200/70 sm:pr-2">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-[11px] font-semibold text-white">{initials}</div>
-          <span className="hidden max-w-[140px] truncate text-sm font-medium text-slate-600 sm:inline">{userEmail || "Tiana Nairobi"}</span>
+          <span className="hidden max-w-[140px] truncate text-sm font-medium text-slate-600 sm:inline">{userEmail || "Usuario"}</span>
           <button onClick={onSignOut} title="Cerrar sesión" className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <LogOut size={14} />
           </button>
@@ -356,54 +278,54 @@ function TopBar({ title, onMenu, userEmail, onSignOut }) {
 /* ---------------------------------- PAGES ---------------------------------- */
 
 function InicioPage({ setActive }) {
-  const alerts = [
-    { icon: Bot, tone: "text-blue-600 bg-blue-50", text: "Nai recomienda: 3 clientes requieren seguimiento hoy." },
-    { icon: AlertTriangle, tone: "text-amber-600 bg-amber-50", text: "Nai detectó: 2 pólizas vencen en los próximos 7 días." },
-    { icon: Flag, tone: "text-red-600 bg-red-50", text: "Siniestro urgente: Carlos Rodríguez (#1044). Requiere revisión." },
-    { icon: CheckCircle2, tone: "text-emerald-600 bg-emerald-50", text: "Alta probabilidad: 4 cotizaciones (promedio 85%) listas para cierre." },
-  ];
+  // Sin alertas de ejemplo: Nai poblará esta sección cuando existan eventos reales.
+  const alerts = [];
   return (
     <div>
       <PageHeader title="Buenos días, Nairobi." subtitle="Tienes el control total de tu operación." />
       <div className="flex flex-col gap-5 md:grid md:grid-cols-3">
         <div className="space-y-5 md:col-span-2">
           <Card title="Atención Prioritaria" icon={Sparkles} action={<NaiTag>Highlights inteligentes de Nai</NaiTag>}>
-            <div className="space-y-2.5">
-              {alerts.map((a, i) => {
-                const Icon = a.icon;
-                return (
-                  <div key={i} className="flex items-start gap-3 rounded-xl border border-slate-100 p-3">
-                    <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${a.tone}`}>
-                      <Icon size={15} />
+            {alerts.length === 0 ? (
+              <EmptyState icon={Sparkles} title="Sin alertas activas" subtitle="Cuando Nai detecte seguimientos, pólizas por vencer o siniestros urgentes, aparecerán aquí." />
+            ) : (
+              <div className="space-y-2.5">
+                {alerts.map((a, i) => {
+                  const Icon = a.icon;
+                  return (
+                    <div key={i} className="flex items-start gap-3 rounded-xl border border-slate-100 p-3">
+                      <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${a.tone}`}>
+                        <Icon size={15} />
+                      </div>
+                      <p className="pt-1 text-sm text-slate-600">{a.text}</p>
                     </div>
-                    <p className="pt-1 text-sm text-slate-600">{a.text}</p>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </Card>
 
           <Card title="Operación de Hoy" icon={CircleDot}>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               <div>
                 <p className="text-xs text-slate-400">Citas</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">10:00 AM — Mariana López</p>
-                <p className="text-xs text-slate-400">Renovación RCV</p>
+                <p className="mt-1 text-sm font-semibold text-slate-700">0 hoy</p>
+                <p className="text-xs text-slate-400">Sin citas agendadas</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">Siniestros Activos</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">7 Reportados</p>
-                <p className="text-xs text-slate-400">1 Resuelto</p>
+                <p className="mt-1 text-sm font-semibold text-slate-700">0 Reportados</p>
+                <p className="text-xs text-slate-400">0 Resueltos</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">Cobranzas</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">12 Pagos Próximos</p>
-                <p className="text-xs text-slate-400">3 Vencidos</p>
+                <p className="mt-1 text-sm font-semibold text-slate-700">0 Pagos Próximos</p>
+                <p className="text-xs text-slate-400">0 Vencidos</p>
               </div>
               <div>
                 <p className="text-xs text-slate-400">Cotizaciones</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">5 Nuevas</p>
-                <p className="text-xs text-slate-400">2 Ganadas</p>
+                <p className="mt-1 text-sm font-semibold text-slate-700">0 Nuevas</p>
+                <p className="text-xs text-slate-400">0 Ganadas</p>
               </div>
             </div>
           </Card>
@@ -419,18 +341,17 @@ function InicioPage({ setActive }) {
         <div className="space-y-5">
           <Card title="Resumen Financiero" icon={DollarSign}>
             <div className="space-y-3">
-              <StatCard label="Ganancias del Mes" value="$8,450.00" delta={12.5} />
-              <StatCard label="Comisiones Acumuladas" value="$2,120.00" />
-              <StatCard label="Pólizas Vendidas" value="28" delta={8} />
+              <StatCard label="Ganancias del Mes" value="$0.00" />
+              <StatCard label="Comisiones Acumuladas" value="$0.00" />
+              <StatCard label="Pólizas Vendidas" value="0" />
             </div>
           </Card>
 
           <Card title="Nai Trabaja. Tú Decides." icon={Bot}>
             <ul className="space-y-3 text-sm text-slate-600">
-              <li className="flex gap-2"><CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-500" />Recientemente: Nai envió 14 recordatorios de pago automáticos (100%).</li>
-              <li className="flex gap-2"><Clock size={15} className="mt-0.5 shrink-0 text-blue-500" />Nai está procesando 3 nuevas cotizaciones en tiempo real.</li>
-              <li className="flex gap-2"><Link2 size={15} className="mt-0.5 shrink-0 text-indigo-500" />Integraciones: WaAPI Activo, n8n Motor Activo, Google Calendar Sincronizado.</li>
-              <li className="flex gap-2"><Building2 size={15} className="mt-0.5 shrink-0 text-slate-400" />9 Aseguradoras conectadas y operando.</li>
+              <li className="flex gap-2"><Clock size={15} className="mt-0.5 shrink-0 text-slate-400" />Aún no hay actividad registrada de Nai en esta cuenta.</li>
+              <li className="flex gap-2"><Link2 size={15} className="mt-0.5 shrink-0 text-indigo-500" />Integraciones: estado real disponible en Configuración.</li>
+              <li className="flex gap-2"><Building2 size={15} className="mt-0.5 shrink-0 text-slate-400" />0 aseguradoras conectadas por ahora.</li>
             </ul>
           </Card>
         </div>
@@ -441,7 +362,7 @@ function InicioPage({ setActive }) {
 
 function MensajesPage() {
   const [conversations, setConversations] = useState(CONVERSATIONS);
-  const [selected, setSelected] = useState(CONVERSATIONS[0]);
+  const [selected, setSelected] = useState(CONVERSATIONS[0] || null);
   const [mode, setMode] = useState(true);
   const [live, setLive] = useState(false);
   const isMobile = useIsMobile();
@@ -458,6 +379,7 @@ function MensajesPage() {
         const mapped = data.map((c, i) => ({
           id: c.id ?? i,
           cliente: c.contacts?.name || "Cliente",
+          telefono: c.contacts?.phone || "—",
           canal: "WhatsApp",
           estado: c.status || "Nuevo",
           hora: c.updated_at ? new Date(c.updated_at).toLocaleTimeString() : "",
@@ -469,14 +391,17 @@ function MensajesPage() {
           })),
         }));
         setConversations(mapped);
-        setSelected(mapped[0]);
+        setSelected(mapped[0] || null);
         setLive(true);
       });
   }, []);
 
   return (
     <div>
-      <PageHeader title="Centro de Mensajes Inteligente" subtitle={live ? "Bandeja en vivo — sincronizada con Supabase." : "Bandeja de entrada unificada de WhatsApp, supervisada por Nai (datos de ejemplo)."} />
+      <PageHeader title="Centro de Mensajes Inteligente" subtitle={live ? "Bandeja en vivo — sincronizada con Supabase." : "Bandeja de entrada unificada de WhatsApp, supervisada por Nai."} />
+      {!selected ? (
+        <EmptyState icon={MessageSquare} title="Sin conversaciones todavía" subtitle="En cuanto lleguen mensajes de WhatsApp a través de n8n, aparecerán aquí." />
+      ) : (
       <div className="flex flex-col gap-4 md:grid md:grid-cols-12 md:gap-5" style={isMobile ? undefined : { height: "calc(100vh - 190px)" }}>
         <div className="flex max-h-96 flex-col rounded-2xl bg-white ring-1 ring-slate-200/70 md:col-span-3 md:max-h-none">
           <div className="flex items-center justify-between border-b border-slate-100 p-3">
@@ -524,11 +449,6 @@ function MensajesPage() {
                 )}
               </div>
             ))}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold text-slate-500">Nai Acción Recomendada</p>
-              <p className="mt-1 text-sm text-slate-600">Sugerencia: enviar cotización pre-aprobada con la mejor comisión disponible.</p>
-              <button className="mt-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">Generar Respuesta Proactiva</button>
-            </div>
           </div>
           <div className="border-t border-slate-100 p-3">
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
@@ -546,9 +466,8 @@ function MensajesPage() {
         <div className="space-y-4 md:col-span-3 md:overflow-y-auto">
           <Card title="Contexto del Cliente" icon={UserIcon}>
             <div className="space-y-2 text-sm text-slate-600">
-              <p className="flex items-center gap-2"><Phone size={13} className="text-slate-400" />+44 585-9837-0300</p>
-              <p className="flex items-center gap-2"><Mail size={13} className="text-slate-400" />{selected.cliente.split(" ")[0].toLowerCase()}@mail.com</p>
-              <p className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-500">Resumen automático: {selected.cliente} busca {selected.resumen.toLowerCase()}. Tráfico frecuente de consultas.</p>
+              <p className="flex items-center gap-2"><Phone size={13} className="text-slate-400" />{selected.telefono || "—"}</p>
+              <p className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-500">Resumen automático: {selected.cliente} — {selected.resumen}.</p>
             </div>
           </Card>
           <Card title="Integraciones" icon={Zap}>
@@ -560,12 +479,13 @@ function MensajesPage() {
           </Card>
         </div>
       </div>
+      )}
     </div>
   );
 }
 
 function SiniestrosPage() {
-  const [selected, setSelected] = useState(CLAIMS[0]);
+  const [selected, setSelected] = useState(CLAIMS[0] || null);
   return (
     <div>
       <PageHeader
@@ -573,6 +493,9 @@ function SiniestrosPage() {
         subtitle="Listado de siniestros (claims list) supervisado por Nai."
         right={<PrimaryButton icon={Plus}>Crear Nuevo Siniestro</PrimaryButton>}
       />
+      {CLAIMS.length === 0 ? (
+        <EmptyState icon={AlertTriangle} title="Sin siniestros registrados" subtitle="Los siniestros reportados por clientes aparecerán en esta lista." />
+      ) : (
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
         <div className="overflow-hidden overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200/70 md:col-span-9">
           <div className="flex items-center gap-2 border-b border-slate-100 p-3">
@@ -618,28 +541,24 @@ function SiniestrosPage() {
         </div>
 
         <div className="space-y-4 md:col-span-3">
-          <Card title="Detalle del Siniestro" icon={FileCheck2}>
-            <p className="text-sm font-semibold text-slate-800">{selected.cliente}</p>
-            <p className="text-xs text-slate-400">{selected.poliza}</p>
-            <div className="mt-3 space-y-1.5 text-sm text-slate-600">
-              <p className="flex items-center gap-2"><Phone size={13} className="text-slate-400" />+44 585-9837-0300</p>
-              <p className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-500">Resumen automático: siniestro {selected.tipo.toLowerCase()} con {selected.aseguradora}.</p>
-            </div>
-            <div className="mt-4 space-y-3">
-              {["Siniestro Reportado · Nai", "Documentación Pendiente · Usuario", "Envío a Aseguradora · Automatización", "En Espera de Resolución · Estado"].map((t, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-semibold text-blue-600">{i + 1}</span>
-                  {t}
+          {selected && (
+            <>
+              <Card title="Detalle del Siniestro" icon={FileCheck2}>
+                <p className="text-sm font-semibold text-slate-800">{selected.cliente}</p>
+                <p className="text-xs text-slate-400">{selected.poliza}</p>
+                <div className="mt-3 space-y-1.5 text-sm text-slate-600">
+                  <p className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-500">Resumen automático: siniestro {selected.tipo.toLowerCase()} con {selected.aseguradora}.</p>
                 </div>
-              ))}
-            </div>
-          </Card>
-          <Card className="border-red-100" title="Siniestro Urgente" icon={AlertTriangle}>
-            <p className="text-xs text-slate-500">Falta documentación crítica. {selected.cliente.split(" ")[0]} debe subir el informe policial.</p>
-            <button className="mt-3 w-full rounded-lg bg-red-600 py-1.5 text-xs font-semibold text-white hover:bg-red-700">Notificar Cliente</button>
-          </Card>
+              </Card>
+              <Card className="border-red-100" title="Estado del Siniestro" icon={AlertTriangle}>
+                <p className="text-xs text-slate-500">Estado actual: {selected.estado}.</p>
+                <button className="mt-3 w-full rounded-lg bg-red-600 py-1.5 text-xs font-semibold text-white hover:bg-red-700">Notificar Cliente</button>
+              </Card>
+            </>
+          )}
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -648,7 +567,10 @@ function CotizacionesPage() {
   const chartData = QUOTE_INSURERS.map((q) => ({ name: q.name, Precio: parseInt(q.price.replace("$", "")), Cobertura: q.score }));
   return (
     <div>
-      <PageHeader title="Comparador de Cotizaciones Multi-Aseguradora" subtitle="Cliente: Carlos Rodríguez · Tipo de seguro: RCV Solicitud" right={<PrimaryButton icon={FileText}>Generar Propuesta</PrimaryButton>} />
+      <PageHeader title="Comparador de Cotizaciones Multi-Aseguradora" subtitle="Compara precios y comisiones entre tus aseguradoras conectadas." right={<PrimaryButton icon={FileText}>Generar Propuesta</PrimaryButton>} />
+      {QUOTE_INSURERS.length === 0 ? (
+        <EmptyState icon={FileText} title="Sin cotizaciones activas" subtitle="Cuando se solicite una cotización, el comparador multi-aseguradora aparecerá aquí." />
+      ) : (
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
         <div className="space-y-5 md:col-span-9">
           <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200/70">
@@ -707,13 +629,8 @@ function CotizacionesPage() {
         </div>
 
         <div className="space-y-4 md:col-span-3">
-          <Card title="Contexto del Cliente" icon={UserIcon}>
-            <p className="flex items-center gap-2 text-sm text-slate-600"><Phone size={13} className="text-slate-400" />+44 585-9837-0300</p>
-            <p className="mt-2 rounded-lg bg-slate-50 p-2.5 text-xs text-slate-500">Carlos busca RCV, interés en salud. Tráfico frecuente de consultas.</p>
-          </Card>
           <Card title="Nai Acción Recomendada" icon={Sparkles}>
-            <p className="text-xs text-slate-500">Nai recomienda Seguros Andes para Carlos Rodríguez. Alta probabilidad de cierre (92%) con la mejor comisión.</p>
-            <button className="mt-3 w-full rounded-lg bg-blue-600 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Generar y Enviar Propuesta</button>
+            <p className="text-xs text-slate-500">Nai sugerirá la mejor opción en cuanto haya cotizaciones activas para comparar.</p>
           </Card>
           <Card title="Timeline de Cotización" icon={Clock}>
             {["Solicitud Recibida · Nai", "Cotizaciones Generadas · Nai", "Comparación Activa · Usuario", "Propuesta Seleccionada · Automatización", "Cierre"].map((t, i) => (
@@ -725,6 +642,7 @@ function CotizacionesPage() {
           </Card>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -737,11 +655,14 @@ function ReportesPage() {
         <div className="space-y-5 md:col-span-8">
           <Card title="Rendimiento Financiero y Crecimiento" icon={TrendingUp}>
             <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-              <StatCard label="Ventas Totales" value="$15,300" delta={8.2} />
-              <StatCard label="Comisiones Acumuladas" value="$4,200" />
-              <StatCard label="Ingresos Acumulados" value="$3,200" delta={1.2} />
-              <StatCard label="Ganancia Neta" value="$11,100" delta={1.1} />
+              <StatCard label="Ventas Totales" value="$0" />
+              <StatCard label="Comisiones Acumuladas" value="$0" />
+              <StatCard label="Ingresos Acumulados" value="$0" />
+              <StatCard label="Ganancia Neta" value="$0" />
             </div>
+            {REVENUE_TREND.length === 0 ? (
+              <EmptyState icon={TrendingUp} title="Sin historial financiero" subtitle="La tendencia de ingresos y gastos se graficará aquí a medida que existan operaciones registradas." />
+            ) : (
             <div style={{ width: "100%", height: 240 }}>
               <ResponsiveContainer>
                 <AreaChart data={REVENUE_TREND}>
@@ -760,9 +681,13 @@ function ReportesPage() {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+            )}
           </Card>
 
           <Card title="Aseguradoras: Rendimiento y Comisiones" icon={Building2}>
+            {INSURERS.length === 0 ? (
+              <EmptyState icon={Building2} title="Sin aseguradoras con actividad" subtitle="Conecta o registra pólizas con tus aseguradoras para ver su rendimiento aquí." />
+            ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400">
@@ -787,35 +712,26 @@ function ReportesPage() {
                 ))}
               </tbody>
             </table>
+            )}
           </Card>
         </div>
 
         <div className="space-y-5 md:col-span-4">
           <Card title="Inteligencia del Agente Nai" icon={Bot}>
-            <p className="text-xs text-slate-500">Nai detectó anomalías en las comisiones de Aseguradora Horizonte (probabilidad 85%). Sugerencia: solicitar revisión automatizada o manual.</p>
-            <div className="mt-3 flex gap-2">
-              <button className="flex-1 rounded-lg bg-blue-600 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Revisión Automatizada</button>
-              <button className="flex-1 rounded-lg border border-slate-200 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Revisión Manual</button>
-            </div>
-            <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400"><Calendar size={12} />3 pagos próximos a vencer en los próximos 7 días.</p>
+            <p className="text-xs text-slate-500">Nai no ha detectado anomalías todavía — necesita datos de comisiones reales para analizar.</p>
           </Card>
 
           <Card title="Integraciones n8n &amp; WaAPI" icon={Zap}>
-            <div className="space-y-3">
-              {[["Motor n8n", true], ["Integración WaAPI", true], ["Conexión a Aseguradoras", true]].map(([label, on], i) => (
-                <div key={i} className="flex items-center justify-between text-sm text-slate-600">{label}<Toggle on={on} onClick={() => {}} /></div>
-              ))}
-            </div>
+            <p className="text-xs text-slate-500">Consulta el estado real de tus integraciones en la sección Configuración.</p>
           </Card>
 
           <Card title="Timeline de Cobranza" icon={Clock}>
-            {[["Factura Generada", "Nai"], ["Notificación WaAPI", "Nai"], ["Pago Próximo", "Amarillo"], ["Pago Vencido", "Rojo"], ["Recuperación", "Automatización"]].map(([t, tag], i) => (
+            {["Factura Generada · Nai", "Notificación WaAPI · Nai", "Pago Próximo · Amarillo", "Pago Vencido · Rojo", "Recuperación · Automatización"].map((t, i) => (
               <div key={i} className="flex items-center justify-between py-1.5 text-xs text-slate-500">
                 <span className="flex items-center gap-2">
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-blue-100 text-[10px] font-semibold text-blue-600">{i + 1}</span>
                   {t}
                 </span>
-                <span className="text-[10px] text-slate-400">{tag}</span>
               </div>
             ))}
           </Card>
@@ -829,6 +745,9 @@ function TablePage({ title, subtitle, columns, rows, badgeCol }) {
   return (
     <div>
       <PageHeader title={title} subtitle={subtitle} right={<PrimaryButton icon={Plus}>Añadir</PrimaryButton>} />
+      {rows.length === 0 ? (
+        <EmptyState title="Sin registros todavía" subtitle="Esta tabla se llenará con datos reales en cuanto existan en la base de datos." />
+      ) : (
       <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200/70">
         <table className="w-full text-sm">
           <thead>
@@ -849,12 +768,13 @@ function TablePage({ title, subtitle, columns, rows, badgeCol }) {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
 
 function ClientesPage() {
-  const [rows, setRows] = useState(CLIENTS.map((c) => ({ nombre: c.name, telefono: c.phone, correo: c.email, polizas: c.polizas, ultimo: c.ultimo, estado: c.estado })));
+  const [rows, setRows] = useState([]);
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -894,11 +814,14 @@ function ClientesPage() {
           live
             ? "Datos en vivo desde Supabase (tabla contacts)."
             : isSupabaseConfigured
-            ? loading ? "Cargando desde Supabase…" : err ? `No se pudo leer contacts: ${err}` : "Sin registros en Supabase todavía — mostrando datos de ejemplo."
-            : "Base de contactos sincronizada desde WhatsApp vía WaAPI (datos de ejemplo — conecta Supabase en .env)."
+            ? loading ? "Cargando desde Supabase…" : err ? `No se pudo leer contacts: ${err}` : "Sin registros en Supabase todavía."
+            : "Base de contactos sincronizada desde WhatsApp vía WaAPI (conecta Supabase en .env)."
         }
         right={<PrimaryButton icon={Plus}>Añadir</PrimaryButton>}
       />
+      {rows.length === 0 ? (
+        <EmptyState icon={Users} title="Sin clientes registrados" subtitle="Los contactos que lleguen por WhatsApp vía n8n aparecerán aquí automáticamente." />
+      ) : (
       <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200/70">
         <table className="w-full text-sm">
           <thead>
@@ -920,6 +843,7 @@ function ClientesPage() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
@@ -952,6 +876,9 @@ function CitasPage() {
   return (
     <div>
       <PageHeader title="Citas" subtitle="Agenda sincronizada con Google Calendar vía n8n." right={<PrimaryButton icon={Plus}>Nueva Cita</PrimaryButton>} />
+      {APPOINTMENTS.length === 0 ? (
+        <EmptyState icon={Calendar} title="Sin citas agendadas" subtitle="Las citas sincronizadas desde Google Calendar aparecerán aquí." />
+      ) : (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {APPOINTMENTS.map((a, i) => (
           <Card key={i}>
@@ -964,6 +891,7 @@ function CitasPage() {
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 }
@@ -972,6 +900,9 @@ function AseguradorasPage() {
   return (
     <div>
       <PageHeader title="Aseguradoras" subtitle="Compañías conectadas y su rendimiento en la operación." right={<PrimaryButton icon={Plus}>Conectar Aseguradora</PrimaryButton>} />
+      {INSURERS.length === 0 ? (
+        <EmptyState icon={Building2} title="Sin aseguradoras con actividad" subtitle="Las aseguradoras con pólizas o cotizaciones reales aparecerán aquí con su rendimiento." />
+      ) : (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {INSURERS.map((i, idx) => (
           <Card key={idx}>
@@ -989,6 +920,7 @@ function AseguradorasPage() {
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 }

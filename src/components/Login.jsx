@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Lock, Mail, KeyRound, Loader2, AlertTriangle } from "lucide-react";
+import { Lock, Mail, KeyRound, Loader2, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "../lib/supabaseClient.js";
 
 export default function Login({ onAuthed }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -67,10 +68,19 @@ export default function Login({ onAuthed }) {
               <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5">
                 <KeyRound size={15} className="text-blue-500" />
                 <input
-                  type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
+                  type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="Contraseña"
                   className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="shrink-0 text-slate-400 transition hover:text-blue-500 focus:outline-none"
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
               </div>
               {error && <p className="text-xs text-red-500">{error}</p>}
               <button
