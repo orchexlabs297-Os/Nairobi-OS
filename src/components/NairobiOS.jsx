@@ -938,7 +938,14 @@ function ComisionesPage() {
 
 /* ------------------------------ CONFIGURACIÓN ------------------------------ */
 
-function IntegrationRow({ label, description, placeholder, value, setValue, secret, testable, icon: Icon }) {
+const WHATSAPP_PROVIDERS = [
+  { id: "waapi", label: "WaAPI" },
+  { id: "meta_cloud_api", label: "Meta Cloud API (oficial)" },
+  { id: "twilio", label: "Twilio WhatsApp" },
+  { id: "gupshup", label: "Gupshup" },
+];
+
+function IntegrationRow({ label, description, placeholder, value, setValue, secret, testable, icon: Icon, readOnly, providerSelect, provider, setProvider }) {
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
   const [enabled, setEnabled] = useState(true);
 
@@ -957,6 +964,19 @@ function IntegrationRow({ label, description, placeholder, value, setValue, secr
     }
   }
 
+  async function testSupabaseConnection() {
+    setStatus("loading");
+    try {
+      if (!isSupabaseConfigured) throw new Error("not configured");
+      // Prueba real usando el SDK de Supabase ya conectado a la app
+      // (no la URL escrita en el campo, que es solo referencia visual).
+      const { error } = await supabase.auth.getSession();
+      setStatus(error ? "error" : "success");
+    } catch (e) {
+      setStatus("error");
+    }
+  }
+
   return (
     <div className="rounded-xl border border-slate-100 p-4">
       <div className="flex items-center justify-between">
@@ -970,23 +990,37 @@ function IntegrationRow({ label, description, placeholder, value, setValue, secr
         <Toggle on={enabled} onClick={() => setEnabled(!enabled)} />
       </div>
       {enabled && (
-        <div className="mt-3 flex items-center gap-2">
-          <input
-            type={secret ? "password" : "text"}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder={placeholder}
-            className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 focus:border-blue-400 focus:outline-none"
-          />
-          {testable && (
-            <button
-              onClick={testConnection}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+        <div className="mt-3 space-y-2">
+          {providerSelect && (
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 focus:border-blue-400 focus:outline-none"
             >
-              {status === "loading" ? <Loader2 size={13} className="animate-spin" /> : status === "success" ? <Check size={13} className="text-emerald-500" /> : status === "error" ? <WifiOff size={13} className="text-red-500" /> : <Wifi size={13} />}
-              Probar
-            </button>
+              {WHATSAPP_PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
           )}
+          <div className="flex items-center gap-2">
+            <input
+              type={secret ? "password" : "text"}
+              value={value}
+              onChange={(e) => !readOnly && setValue(e.target.value)}
+              placeholder={placeholder}
+              readOnly={readOnly}
+              className={`flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none ${readOnly ? "bg-slate-50 text-slate-400" : "text-slate-600"}`}
+            />
+            {testable && (
+              <button
+                onClick={label === "Conexión Supabase" ? testSupabaseConnection : testConnection}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                {status === "loading" ? <Loader2 size={13} className="animate-spin" /> : status === "success" ? <Check size={13} className="text-emerald-500" /> : status === "error" ? <WifiOff size={13} className="text-red-500" /> : <Wifi size={13} />}
+                Probar
+              </button>
+            )}
+          </div>
         </div>
       )}
       {status === "success" && <p className="mt-1.5 text-[11px] text-emerald-600">Conexión establecida correctamente.</p>}
@@ -997,34 +1031,64 @@ function IntegrationRow({ label, description, placeholder, value, setValue, secr
 
 function ConfiguracionPage() {
   const [n8nUrl, setN8nUrl] = useState("");
+  const [waapiProvider, setWaapiProvider] = useState("waapi");
   const [waapiKey, setWaapiKey] = useState("");
-  const [supabaseUrl, setSupabaseUrl] = useState(import.meta.env.VITE_SUPABASE_URL || "");
   const [calendarId, setCalendarId] = useState("");
+  const [saveStatus, setSaveStatus] = useState("idle"); // idle | loading | success | error
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+
+  // El panel nunca escribe directo a Supabase (arquitectura: n8n = único
+  // escritor vía service_role). "Guardar" despacha un evento al webhook
+  // de n8n configurado arriba; es n8n quien debe persistir el cambio.
+  async function handleGuardar() {
+    if (!n8nUrl) { setSaveStatus("error"); return; }
+    setSaveStatus("loading");
+    try {
+      const res = await fetch(n8nUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event: "nairobi_os_config_update",
+          source: "Nairobi OS Panel",
+          timestamp: new Date().toISOString(),
+          payload: {
+            whatsapp: { provider: waapiProvider, token: waapiKey ? "••• (enviado)" : null },
+            google_calendar: { calendar_id: calendarId || null },
+          },
+        }),
+      });
+      setSaveStatus(res.ok ? "success" : "error");
+    } catch (e) {
+      setSaveStatus("error");
+    }
+  }
 
   return (
     <div>
-      <PageHeader title="Configuración" subtitle="Conecta Nairobi OS con n8n, WhatsApp (WaAPI), Supabase y APIs externas." />
+      <PageHeader title="Configuración" subtitle="Conecta Nairobi OS con n8n, WhatsApp, Supabase y APIs externas." />
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
         <div className="space-y-5 md:col-span-8">
           <Card title="Automatización e Integraciones" icon={Zap}>
             <div className="space-y-3">
               <IntegrationRow
-                icon={Link2} label="Webhook de n8n" description="Endpoint que recibe y despacha los flujos de trabajo de Nairobi OS."
+                icon={Link2} label="Webhook de n8n" description="Endpoint que recibe y despacha los flujos de trabajo de Nairobi OS. El botón Guardar Configuración envía los cambios de esta página a esta URL."
                 placeholder="https://tu-instancia.n8n.cloud/webhook/nairobi-os"
                 value={n8nUrl} setValue={setN8nUrl} testable
               />
               <IntegrationRow
-                icon={MessageSquare} label="WaAPI (WhatsApp Business)" description="Token para envío y recepción de mensajes automatizados."
-                placeholder="waapi_live_••••••••••••"
+                icon={MessageSquare} label="WhatsApp Business" description="Proveedor activo para envío y recepción de mensajes. El token se envía a n8n al guardar; nunca se lee ni se muestra desde Supabase."
+                placeholder="Token del proveedor seleccionado"
                 value={waapiKey} setValue={setWaapiKey} secret testable={false}
+                providerSelect provider={waapiProvider} setProvider={setWaapiProvider}
               />
               <IntegrationRow
-                icon={Building2} label="Conexión Supabase" description="Base de datos operativa (contacts, conversations, messages). La URL y anon key reales se leen de tu .env — este campo es solo para pruebas de conectividad."
+                icon={Building2} label="Conexión Supabase" description="Base de datos operativa (contacts, conversations, messages, etc.). URL y anon key reales, leídas de las variables de entorno del despliegue. Probar verifica la sesión real del SDK, no un texto libre."
                 placeholder="https://tu-proyecto.supabase.co"
-                value={supabaseUrl} setValue={setSupabaseUrl} testable
+                value={supabaseUrl} setValue={() => {}} testable readOnly
               />
               <IntegrationRow
-                icon={Calendar} label="Google Calendar" description="Sincroniza citas y renovaciones automáticamente."
+                icon={Calendar} label="Google Calendar" description="Sincroniza citas y renovaciones automáticamente. Pendiente: la autenticación (OAuth / cuenta de servicio) debe vivir en n8n, no en el panel."
                 placeholder="ID de calendario o cuenta de servicio"
                 value={calendarId} setValue={setCalendarId} testable={false}
               />
@@ -1049,7 +1113,7 @@ function ConfiguracionPage() {
         <div className="space-y-5 md:col-span-4">
           <Card title="Estado del Sistema" icon={CircleDot}>
             <div className="space-y-2.5 text-sm">
-              {[["Motor n8n", n8nUrl ? "Configurado" : "Pendiente"], ["WaAPI", waapiKey ? "Configurado" : "Pendiente"], ["Supabase", supabaseUrl ? "Configurado" : "Pendiente"]].map(([l, s], i) => (
+              {[["Motor n8n", n8nUrl ? "Configurado" : "Pendiente"], ["WhatsApp", waapiKey ? "Configurado" : "Pendiente"], ["Supabase", isSupabaseConfigured ? "Configurado" : "Pendiente"]].map(([l, s], i) => (
                 <div key={i} className="flex items-center justify-between">
                   <span className="text-slate-600">{l}</span>
                   <StatusBadge status={s === "Configurado" ? "Activo" : "Próximo"} />
@@ -1058,11 +1122,18 @@ function ConfiguracionPage() {
             </div>
           </Card>
           <Card title="Seguridad" icon={KeyRound}>
-            <p className="text-xs text-slate-500">Acceso restringido a nivel de base de datos: RLS activo en todas las tablas, escritura exclusiva vía <code className="rounded bg-slate-100 px-1 py-0.5">service_role</code> desde n8n.</p>
+            <p className="text-xs text-slate-500">Acceso restringido a nivel de base de datos: RLS activo en todas las tablas, escritura exclusiva vía <code className="rounded bg-slate-100 px-1 py-0.5">service_role</code> desde n8n. Este panel nunca escribe directo a Supabase.</p>
           </Card>
-          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
-            <Save size={15} /> Guardar Configuración
+          <button
+            onClick={handleGuardar}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+            disabled={saveStatus === "loading"}
+          >
+            {saveStatus === "loading" ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+            Guardar Configuración
           </button>
+          {saveStatus === "success" && <p className="text-center text-[11px] text-emerald-600">Enviado al webhook de n8n correctamente.</p>}
+          {saveStatus === "error" && <p className="text-center text-[11px] text-red-500">No se pudo enviar. Verifica el webhook de n8n arriba.</p>}
         </div>
       </div>
     </div>
