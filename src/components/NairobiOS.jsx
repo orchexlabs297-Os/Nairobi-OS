@@ -615,7 +615,15 @@ function CreateModal({ title, fields, resource, onClose, onCreated }) {
   async function submit() {
     setStatus("loading");
     try {
-      const res = await callAppWebApi(resource, values);
+      // <input type="datetime-local"> no trae zona horaria (ej. "2026-08-25T14:30");
+      // se convierte a ISO real con la zona del navegador antes de mandarlo a n8n.
+      const payload = { ...values };
+      for (const f of fields) {
+        if (f.type === "datetime-local" && payload[f.name]) {
+          payload[f.name] = new Date(payload[f.name]).toISOString();
+        }
+      }
+      const res = await callAppWebApi(resource, payload);
       if (!res?.ok) throw new Error(res?.error || "n8n respondió sin éxito");
       setStatus("success");
       onCreated?.();
@@ -1100,13 +1108,15 @@ function ClientesPage() {
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     supabase
       .from("contacts")
-      .select("id, name, phone, email, customer_status, updated_at, policies(id), conversations(messages(metadata))")
+      .select("id, name, phone, email, customer_status, updated_at, metadata, policies(id), conversations(messages(metadata))")
       .order("created_at", { ascending: false })
       .limit(50)
       .then(({ data, error }) => {
@@ -1115,6 +1125,7 @@ function ClientesPage() {
         if (data && data.length > 0) {
           const clientesReales = data.filter((c) =>
             (c.policies?.length ?? 0) > 0 ||
+            c.metadata?.source === "panel_manual" ||
             (c.conversations || []).some((cv) => (cv.messages || []).some((m) => esSenalDeNegocio(m.metadata?.classification)))
           );
           setRows(
@@ -1130,10 +1141,23 @@ function ClientesPage() {
           setLive(true);
         }
       });
-  }, []);
+  }, [reloadTick]);
 
   return (
     <div>
+      {showCreate && (
+        <CreateModal
+          title="Añadir Cliente"
+          resource="contact-create"
+          fields={[
+            { name: "phone", label: "Teléfono (con código de país, sin +)", placeholder: "584121234567" },
+            { name: "name", label: "Nombre", placeholder: "Nombre completo" },
+            { name: "email", label: "Correo (opcional)", placeholder: "correo@ejemplo.com" },
+          ]}
+          onClose={() => setShowCreate(false)}
+          onCreated={() => setReloadTick((t) => t + 1)}
+        />
+      )}
       <PageHeader
         title="Clientes"
         subtitle={
@@ -1143,7 +1167,7 @@ function ClientesPage() {
             ? loading ? "Cargando desde Supabase…" : err ? `No se pudo leer contacts: ${err}` : "Sin registros en Supabase todavía."
             : "Base de contactos sincronizada desde WhatsApp vía WaAPI (conecta Supabase en .env)."
         }
-        right={<PrimaryButton icon={Plus}>Añadir</PrimaryButton>}
+        right={<PrimaryButton icon={Plus} onClick={() => setShowCreate(true)}>Añadir</PrimaryButton>}
       />
       {rows.length === 0 ? (
         <EmptyState icon={Users} title="Sin clientes registrados" subtitle="Los contactos que pregunten por un seguro, cotización, siniestro o pago aparecerán aquí — el resto del tráfico personal al número se filtra." />
@@ -1256,6 +1280,8 @@ function CitasPage() {
   const [rows, setRows] = useState(APPOINTMENTS);
   const [live, setLive] = useState(false);
   const [err, setErr] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -1277,11 +1303,26 @@ function CitasPage() {
           setLive(true);
         }
       });
-  }, []);
+  }, [reloadTick]);
 
   return (
     <div>
-      <PageHeader title="Citas" subtitle={live ? "Datos en vivo desde Supabase (tabla appointments)." : "Agenda sincronizada con Google Calendar vía n8n."} right={<PrimaryButton icon={Plus}>Nueva Cita</PrimaryButton>} />
+      {showCreate && (
+        <CreateModal
+          title="Nueva Cita"
+          resource="appointment"
+          fields={[
+            { name: "chat_id", label: "Teléfono del cliente (debe existir en Clientes)", placeholder: "584121234567" },
+            { name: "title", label: "Título", placeholder: "Reunión de cotización" },
+            { name: "purpose", label: "Motivo", placeholder: "Revisar opciones de RCV" },
+            { name: "starts_at", label: "Inicio", type: "datetime-local" },
+            { name: "ends_at", label: "Fin", type: "datetime-local" },
+          ]}
+          onClose={() => setShowCreate(false)}
+          onCreated={() => setReloadTick((t) => t + 1)}
+        />
+      )}
+      <PageHeader title="Citas" subtitle={live ? "Datos en vivo desde Supabase (tabla appointments)." : "Agenda sincronizada con Google Calendar vía n8n."} right={<PrimaryButton icon={Plus} onClick={() => setShowCreate(true)}>Nueva Cita</PrimaryButton>} />
       {err && <p className="mb-3 text-xs text-red-500">No se pudo leer appointments: {err}</p>}
       {rows.length === 0 ? (
         <EmptyState icon={Calendar} title="Sin citas agendadas" subtitle="Las citas sincronizadas desde Google Calendar aparecerán aquí." />
