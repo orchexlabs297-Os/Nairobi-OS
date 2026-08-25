@@ -360,52 +360,129 @@ function InicioPage({ setActive }) {
   );
 }
 
+// El toggle "Automatizado/Manual" y el estado del sistema hablan con n8n vía
+// el recurso bot-toggle de W8 (Webhook App Web) — nunca escriben directo a
+// Supabase (misma regla que ConfiguracionPage: n8n es el único escritor).
+const N8N_APP_WEB_URL = import.meta.env.VITE_N8N_APP_WEB_URL || "";
+const N8N_APP_WEB_SECRET = import.meta.env.VITE_N8N_APP_WEB_SECRET || "";
+
+async function callAppWebApi(resource, body) {
+  if (!N8N_APP_WEB_URL) throw new Error("VITE_N8N_APP_WEB_URL no configurado");
+  const res = await fetch(`${N8N_APP_WEB_URL.replace(/\/$/, "")}/${resource}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(N8N_APP_WEB_SECRET ? { "x-app-web-secret": N8N_APP_WEB_SECRET } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`n8n respondió ${res.status}`);
+  return res.json().catch(() => ({}));
+}
+
+// Traduce el resultado real del clasificador de W2 (metadata.classification)
+// y de la compuerta de respuesta (metadata.gate) a algo legible — mismos
+// campos que persiste "Aplicar compuerta" en workflows/w2_cerebro_nai.json.
+function GateBadge({ classification, gate }) {
+  if (gate && gate.replied === false) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 ring-1 ring-inset ring-slate-200">
+        <WifiOff size={10} /> Silenciado — {gate.reason || "sin motivo registrado"}
+      </span>
+    );
+  }
+  if (classification?.scope) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600 ring-1 ring-inset ring-indigo-100">
+        <Sparkles size={10} /> {classification.intent || classification.scope} · {Math.round((classification.confidence ?? 0) * 100)}%
+      </span>
+    );
+  }
+  return null;
+}
+
 function MensajesPage() {
   const [conversations, setConversations] = useState(CONVERSATIONS);
-  const [selected, setSelected] = useState(CONVERSATIONS[0] || null);
-  const [mode, setMode] = useState(true);
+  const [selected, setSelected] = useState(null);
   const [live, setLive] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [toggling, setToggling] = useState(false);
   const isMobile = useIsMobile();
 
-  useEffect(() => {
+  function loadConversations() {
     if (!isSupabaseConfigured) return;
+    setLoading(true);
     supabase
       .from("conversations")
-      .select("*, contacts(name, phone), messages(body, direction, created_at)")
-      .order("updated_at", { ascending: false })
-      .limit(20)
+      .select("id, status, should_respond, metadata, created_at, contacts(phone), messages(id, message_text, direction, metadata, created_at)")
+      .order("created_at", { ascending: false })
+      .order("created_at", { foreignTable: "messages", ascending: true })
+      .limit(30)
       .then(({ data, error }) => {
-        if (error || !data || data.length === 0) return;
-        const mapped = data.map((c, i) => ({
-          id: c.id ?? i,
-          cliente: c.contacts?.name || "Cliente",
-          telefono: c.contacts?.phone || "—",
-          canal: "WhatsApp",
-          estado: c.status || "Nuevo",
-          hora: c.updated_at ? new Date(c.updated_at).toLocaleTimeString() : "",
-          resumen: c.last_summary || "Conversación de WhatsApp",
-          prob: c.commercial_probability ?? 50,
-          thread: (c.messages || []).map((m) => ({
-            from: m.direction === "inbound" ? "client" : m.direction === "ai" ? "nai" : "agent",
-            text: m.body,
-          })),
-        }));
+        setLoading(false);
+        if (error) { setErr(error.message); return; }
+        if (!data) return;
+        const mapped = data.map((c) => {
+          const msgs = c.messages || [];
+          const last = msgs[msgs.length - 1];
+          return {
+            id: c.id,
+            cliente: c.contacts?.phone ? `+${c.contacts.phone}` : "Cliente",
+            telefono: c.contacts?.phone || "—",
+            estado: c.status === "active" ? "Activo" : c.status === "resolved" ? "Resuelto" : c.status || "Nuevo",
+            should_respond: c.should_respond !== false,
+            hora: last?.created_at ? new Date(last.created_at).toLocaleTimeString() : "",
+            resumen: last?.message_text ? last.message_text.slice(0, 60) : "Sin mensajes todavía",
+            thread: msgs.map((m) => ({
+              id: m.id,
+              from: m.direction === "inbound" ? "client" : "nai",
+              text: m.message_text,
+              classification: m.metadata?.classification,
+              gate: m.metadata?.gate,
+            })),
+          };
+        });
         setConversations(mapped);
-        setSelected(mapped[0] || null);
+        setSelected((prev) => mapped.find((m) => m.id === prev?.id) || mapped[0] || null);
         setLive(true);
       });
-  }, []);
+  }
+
+  useEffect(() => { loadConversations(); }, []);
+
+  async function toggleBot(conv) {
+    if (!conv?.telefono || conv.telefono === "—") return;
+    setToggling(true);
+    try {
+      await callAppWebApi("bot-toggle", { chat_id: conv.telefono, bot_enabled: !conv.should_respond });
+      loadConversations();
+    } catch (e) {
+      setErr(`No se pudo cambiar el modo vía n8n: ${e.message}`);
+    } finally {
+      setToggling(false);
+    }
+  }
 
   return (
     <div>
-      <PageHeader title="Centro de Mensajes Inteligente" subtitle={live ? "Bandeja en vivo — sincronizada con Supabase." : "Bandeja de entrada unificada de WhatsApp, supervisada por Nai."} />
+      <PageHeader
+        title="Centro de Mensajes Inteligente"
+        subtitle={
+          live
+            ? "Bandeja en vivo — sincronizada con Supabase (public.conversations / public.messages)."
+            : isSupabaseConfigured
+            ? loading ? "Cargando desde Supabase…" : err ? `No se pudo leer conversations: ${err}` : "Sin conversaciones en Supabase todavía."
+            : "Bandeja de entrada unificada de WhatsApp, supervisada por Nai (conecta Supabase en .env)."
+        }
+      />
       {!selected ? (
         <EmptyState icon={MessageSquare} title="Sin conversaciones todavía" subtitle="En cuanto lleguen mensajes de WhatsApp a través de n8n, aparecerán aquí." />
       ) : (
       <div className="flex flex-col gap-4 md:grid md:grid-cols-12 md:gap-5" style={isMobile ? undefined : { height: "calc(100vh - 190px)" }}>
         <div className="flex max-h-96 flex-col rounded-2xl bg-white ring-1 ring-slate-200/70 md:col-span-3 md:max-h-none">
           <div className="flex items-center justify-between border-b border-slate-100 p-3">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Atención Prioritaria</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Conversaciones</span>
             <ListFilter size={14} className="text-slate-400" />
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -420,7 +497,12 @@ function MensajesPage() {
                   <span className="text-[11px] text-slate-400">{c.hora}</span>
                 </div>
                 <p className="mt-0.5 truncate text-xs text-slate-400">{c.resumen}</p>
-                <div className="mt-1.5"><StatusBadge status={c.estado} /></div>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <StatusBadge status={c.estado} />
+                  {!c.should_respond && (
+                    <span className="text-[10px] font-medium text-amber-600">Nai en pausa</span>
+                  )}
+                </div>
               </button>
             ))}
           </div>
@@ -430,22 +512,23 @@ function MensajesPage() {
           <div className="flex items-center justify-between border-b border-slate-100 p-4">
             <div>
               <p className="text-sm font-semibold text-slate-800">{selected.cliente}</p>
-              <p className="text-xs text-slate-400">{selected.resumen} · Probabilidad comercial: {selected.prob}%</p>
+              <p className="text-xs text-slate-400">{selected.thread.length} mensajes</p>
             </div>
             <MoreVertical size={16} className="text-slate-400" />
           </div>
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {selected.thread.map((m, i) => (
-              <div key={i} className={`flex ${m.from === "client" ? "justify-start" : "justify-end"}`}>
+              <div key={m.id ?? i} className={`flex flex-col ${m.from === "client" ? "items-start" : "items-end"}`}>
                 {m.from === "nai" ? (
                   <div className="max-w-[75%] rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-2 text-sm text-indigo-700">
                     <div className="mb-1 flex items-center gap-1 text-[11px] font-semibold"><Sparkles size={11} />Nai</div>
                     {m.text}
                   </div>
                 ) : (
-                  <div className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${m.from === "client" ? "bg-slate-100 text-slate-700" : "bg-blue-600 text-white"}`}>
-                    {m.text}
-                  </div>
+                  <div className="max-w-[75%] rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700">{m.text}</div>
+                )}
+                {(m.classification || m.gate) && (
+                  <div className="mt-1"><GateBadge classification={m.classification} gate={m.gate} /></div>
                 )}
               </div>
             ))}
@@ -454,10 +537,14 @@ function MensajesPage() {
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
               <Smile size={16} className="text-slate-400" />
               <Paperclip size={16} className="text-slate-400" />
-              <input placeholder="Escribe un mensaje..." className="flex-1 bg-transparent text-sm focus:outline-none" />
+              <input placeholder="Escribe un mensaje... (respuesta manual — pendiente de conectar)" className="flex-1 bg-transparent text-sm focus:outline-none" disabled />
               <div className="flex items-center gap-2 border-l border-slate-200 pl-2">
-                <Toggle on={mode} onClick={() => setMode(!mode)} label={mode ? "Automatizado" : "Manual"} />
-                <button className="rounded-lg bg-blue-600 p-1.5 text-white"><Send size={14} /></button>
+                <Toggle
+                  on={selected.should_respond}
+                  onClick={() => !toggling && toggleBot(selected)}
+                  label={toggling ? "..." : selected.should_respond ? "Automatizado" : "Manual"}
+                />
+                <button className="rounded-lg bg-blue-600 p-1.5 text-white opacity-50" disabled title="Envío manual pendiente de conectar"><Send size={14} /></button>
               </div>
             </div>
           </div>
@@ -467,15 +554,24 @@ function MensajesPage() {
           <Card title="Contexto del Cliente" icon={UserIcon}>
             <div className="space-y-2 text-sm text-slate-600">
               <p className="flex items-center gap-2"><Phone size={13} className="text-slate-400" />{selected.telefono || "—"}</p>
-              <p className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-500">Resumen automático: {selected.cliente} — {selected.resumen}.</p>
             </div>
           </Card>
-          <Card title="Integraciones" icon={Zap}>
+          <Card title="Control de Nai" icon={Zap}>
             <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-2 text-slate-600"><Wifi size={14} className="text-emerald-500" />WaAPI &amp; n8n</span>
-              <Toggle on={true} onClick={() => {}} />
+              <span className="flex items-center gap-2 text-slate-600">
+                {selected.should_respond ? <Wifi size={14} className="text-emerald-500" /> : <WifiOff size={14} className="text-amber-500" />}
+                Respuesta automática
+              </span>
+              <Toggle on={selected.should_respond} onClick={() => !toggling && toggleBot(selected)} />
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">Automatización activa — Nai Supervisando</p>
+            <p className="mt-2 text-[11px] text-slate-400">
+              {selected.should_respond
+                ? "Nai responde automáticamente en esta conversación."
+                : "Nai está en pausa aquí — solo tú puedes responder hasta que la reactives."}
+            </p>
+            {!N8N_APP_WEB_URL && (
+              <p className="mt-2 text-[11px] text-amber-600">VITE_N8N_APP_WEB_URL no está configurado — el toggle no puede llegar a n8n.</p>
+            )}
           </Card>
         </div>
       </div>
@@ -1029,8 +1125,62 @@ function IntegrationRow({ label, description, placeholder, value, setValue, secr
   );
 }
 
+// Lee el estado real de la automatización: public.settings (mode, test_allowlist,
+// escritos por n8n) y public.system_errors de las últimas 24h. Nunca escribe —
+// mismo principio de "n8n es el único escritor" que el resto del panel.
+function SystemStatusCard() {
+  const [mode, setMode] = useState(null);
+  const [allowlistCount, setAllowlistCount] = useState(null);
+  const [recentErrors, setRecentErrors] = useState(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("settings")
+      .select("key, value")
+      .in("key", ["mode", "test_allowlist"])
+      .then(({ data, error }) => {
+        if (error) { setErr(error.message); return; }
+        const modeRow = data?.find((r) => r.key === "mode");
+        const allowRow = data?.find((r) => r.key === "test_allowlist");
+        setMode(modeRow?.value ?? "test");
+        setAllowlistCount(Array.isArray(allowRow?.value) ? allowRow.value.length : 0);
+      });
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    supabase
+      .from("system_errors")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", since)
+      .then(({ count, error }) => {
+        if (!error) setRecentErrors(count ?? 0);
+      });
+  }, []);
+
+  if (!isSupabaseConfigured) return null;
+
+  return (
+    <Card title="Estado real de Nai (n8n)" icon={Bot}>
+      <div className="space-y-2.5 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-slate-600">Modo</span>
+          <StatusBadge status={mode === "production" ? "Activo" : mode === "test" ? "En Proceso" : "Próximo"} />
+        </div>
+        {mode === "test" && (
+          <p className="text-[11px] text-slate-400">Solo responde a {allowlistCount ?? "—"} número(s) autorizados en pruebas — no a clientes reales todavía.</p>
+        )}
+        <div className="flex items-center justify-between">
+          <span className="text-slate-600">Errores (24h)</span>
+          <span className={`text-sm font-semibold ${recentErrors ? "text-red-500" : "text-emerald-600"}`}>{recentErrors ?? "…"}</span>
+        </div>
+        {err && <p className="text-[11px] text-red-500">{err}</p>}
+      </div>
+    </Card>
+  );
+}
+
 function ConfiguracionPage() {
-  const [n8nUrl, setN8nUrl] = useState("");
+  const [n8nUrl, setN8nUrl] = useState(import.meta.env.VITE_N8N_APP_WEB_URL || "");
   const [waapiProvider, setWaapiProvider] = useState("waapi");
   const [waapiKey, setWaapiKey] = useState("");
   const [calendarId, setCalendarId] = useState("");
@@ -1111,6 +1261,7 @@ function ConfiguracionPage() {
         </div>
 
         <div className="space-y-5 md:col-span-4">
+          <SystemStatusCard />
           <Card title="Estado del Sistema" icon={CircleDot}>
             <div className="space-y-2.5 text-sm">
               {[["Motor n8n", n8nUrl ? "Configurado" : "Pendiente"], ["WhatsApp", waapiKey ? "Configurado" : "Pendiente"], ["Supabase", isSupabaseConfigured ? "Configurado" : "Pendiente"]].map(([l, s], i) => (
