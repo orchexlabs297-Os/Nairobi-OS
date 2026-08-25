@@ -54,6 +54,30 @@ const COLLECTIONS = [];
 
 const COMMISSIONS = [];
 
+// Traducen los valores reales de los campos "status" (en inglés, definidos por
+// check constraints en supabase/migration_02_core_tables.sql) a las etiquetas
+// en español que ya usa STATUS_STYLES — sin inventar estados nuevos.
+const CLAIM_STATUS_LABEL = {
+  reported: "Nuevo", documents_pending: "Documentación Pendiente", submitted: "En Proceso",
+  in_review: "En Revisión", approved: "Resuelto", paid: "Resuelto", closed: "Resuelto", rejected: "Escalado",
+};
+const QUOTE_STATUS_LABEL = {
+  draft: "Prospecto", completed: "Nuevo", partial: "En Proceso", manual_pending: "En Proceso",
+  sent: "En Proceso", accepted: "Activo", rejected: "Escalado", expired: "Vencido",
+};
+const POLICY_STATUS_LABEL = {
+  pending: "Próximo", active: "Activa", lapsed: "Por Vencer", cancelled: "Vencido", renewed: "Activa",
+};
+const PAYMENT_STATUS_LABEL = {
+  pending: "Próximo", paid: "Activo", overdue: "Vencido", waived: "Resuelto", failed: "Vencido",
+};
+const APPT_STATUS_LABEL = {
+  scheduled: "Nuevo", confirmed: "Activo", cancelled: "Vencido", completed: "Resuelto", no_show: "Vencido",
+};
+const COMMISSION_STATUS_LABEL = {
+  accrued: "En Proceso", invoiced: "Próximo", collected: "Activo", cancelled: "Vencido",
+};
+
 /* --------------------------------- HELPERS --------------------------------- */
 
 const STATUS_STYLES = {
@@ -581,15 +605,45 @@ function MensajesPage() {
 }
 
 function SiniestrosPage() {
-  const [selected, setSelected] = useState(CLAIMS[0] || null);
+  const [rows, setRows] = useState(CLAIMS);
+  const [selected, setSelected] = useState(null);
+  const [live, setLive] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("claims")
+      .select("id, status, severity, incident_type, amount_claimed, reported_at, contacts(name, phone), policies(policy_number, insurers(name))")
+      .order("reported_at", { ascending: false })
+      .limit(50)
+      .then(({ data, error }) => {
+        if (error) { setErr(error.message); return; }
+        if (!data) return;
+        const mapped = data.map((c) => ({
+          id: c.id,
+          cliente: c.contacts?.name || c.contacts?.phone || "Cliente",
+          poliza: c.policies?.policy_number || "—",
+          tipo: c.incident_type || "Sin especificar",
+          aseguradora: c.policies?.insurers?.name || "—",
+          fecha: c.reported_at ? new Date(c.reported_at).toLocaleDateString() : "—",
+          estado: CLAIM_STATUS_LABEL[c.status] || c.status,
+          prioridad: c.severity === "severe" || c.severity === "fatal" ? "Urgente" : c.severity === "moderate" ? "Media" : "Baja",
+        }));
+        setRows(mapped);
+        setLive(true);
+      });
+  }, []);
+
   return (
     <div>
       <PageHeader
         title="Centro de Siniestros"
-        subtitle="Listado de siniestros (claims list) supervisado por Nai."
+        subtitle={live ? "Datos en vivo desde Supabase (tabla claims)." : "Listado de siniestros (claims list) supervisado por Nai."}
         right={<PrimaryButton icon={Plus}>Crear Nuevo Siniestro</PrimaryButton>}
       />
-      {CLAIMS.length === 0 ? (
+      {err && <p className="mb-3 text-xs text-red-500">No se pudo leer claims: {err}</p>}
+      {rows.length === 0 ? (
         <EmptyState icon={AlertTriangle} title="Sin siniestros registrados" subtitle="Los siniestros reportados por clientes aparecerán en esta lista." />
       ) : (
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
@@ -612,11 +666,11 @@ function SiniestrosPage() {
               </tr>
             </thead>
             <tbody>
-              {CLAIMS.map((c, i) => (
+              {rows.map((c) => (
                 <tr
-                  key={i}
+                  key={c.id}
                   onClick={() => setSelected(c)}
-                  className={`cursor-pointer border-b border-slate-50 transition hover:bg-slate-50 ${selected === c ? "bg-blue-50/50" : ""}`}
+                  className={`cursor-pointer border-b border-slate-50 transition hover:bg-slate-50 ${selected?.id === c.id ? "bg-blue-50/50" : ""}`}
                 >
                   <td className="flex items-center gap-2 px-4 py-3">
                     <div className="grid h-6 w-6 place-items-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">
@@ -660,11 +714,50 @@ function SiniestrosPage() {
 }
 
 function CotizacionesPage() {
-  const chartData = QUOTE_INSURERS.map((q) => ({ name: q.name, Precio: parseInt(q.price.replace("$", "")), Cobertura: q.score }));
+  const [quote, setQuote] = useState(null);
+  const [lines, setLines] = useState(QUOTE_INSURERS);
+  const [live, setLive] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("quotes")
+      .select("id, status, created_at, contacts(name, phone), quote_lines(id, premium, coverage_sum, commission_pct, rank, unavailable_reason, insurers(name))")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .then(({ data, error }) => {
+        if (error) { setErr(error.message); return; }
+        const q = data?.[0];
+        if (!q) return;
+        setQuote(q);
+        const mapped = (q.quote_lines || [])
+          .filter((l) => l.premium != null)
+          .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
+          .map((l, i) => ({
+            key: String.fromCharCode(65 + i),
+            name: l.insurers?.name || "—",
+            price: `$${l.premium}`,
+            coverage: l.coverage_sum ? `$${l.coverage_sum}` : "—",
+            commission: l.commission_pct ? `${l.commission_pct}%` : "—",
+            score: Math.max(0, 100 - i * 8),
+            rec: i === 0 ? "Mejor opción" : `${Math.max(50, 90 - i * 10)}%`,
+          }));
+        setLines(mapped);
+        setLive(true);
+      });
+  }, []);
+
+  const chartData = lines.map((q) => ({ name: q.name, Precio: parseInt(q.price.replace("$", "")) || 0, Cobertura: q.score }));
   return (
     <div>
-      <PageHeader title="Comparador de Cotizaciones Multi-Aseguradora" subtitle="Compara precios y comisiones entre tus aseguradoras conectadas." right={<PrimaryButton icon={FileText}>Generar Propuesta</PrimaryButton>} />
-      {QUOTE_INSURERS.length === 0 ? (
+      <PageHeader
+        title="Comparador de Cotizaciones Multi-Aseguradora"
+        subtitle={live ? `Última cotización — ${quote?.contacts?.name || quote?.contacts?.phone || "cliente"} (${QUOTE_STATUS_LABEL[quote?.status] || quote?.status}).` : "Compara precios y comisiones entre tus aseguradoras conectadas."}
+        right={<PrimaryButton icon={FileText}>Generar Propuesta</PrimaryButton>}
+      />
+      {err && <p className="mb-3 text-xs text-red-500">No se pudo leer quotes: {err}</p>}
+      {lines.length === 0 ? (
         <EmptyState icon={FileText} title="Sin cotizaciones activas" subtitle="Cuando se solicite una cotización, el comparador multi-aseguradora aparecerá aquí." />
       ) : (
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
@@ -682,7 +775,7 @@ function CotizacionesPage() {
                 </tr>
               </thead>
               <tbody>
-                {QUOTE_INSURERS.map((q, i) => (
+                {lines.map((q, i) => (
                   <tr key={i} className={`border-b border-slate-50 ${i === 0 ? "bg-blue-50/40" : ""}`}>
                     <td className="flex items-center gap-2 px-4 py-3 font-medium text-slate-700">
                       <span className="grid h-6 w-6 place-items-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-500">{q.key}</span>
@@ -744,17 +837,50 @@ function CotizacionesPage() {
 }
 
 function ReportesPage() {
+  const [insurerRows, setInsurerRows] = useState(INSURERS);
+  const [totals, setTotals] = useState({ ventas: 0, comisionesAcum: 0, ingresosAcum: 0 });
+  const [live, setLive] = useState(false);
+  const [err, setErr] = useState("");
+  const PALETTE = ["#2563eb", "#0ea5e9", "#6366f1", "#0d9488", "#7c3aed", "#f59e0b", "#ef4444", "#10b981", "#64748b"];
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    Promise.all([
+      supabase.from("insurers").select("id, name, commission_default_pct").order("name"),
+      supabase.from("policies").select("insurer_id, premium_total, status"),
+      supabase.from("commissions").select("insurer_id, net_amount, status"),
+    ]).then(([insRes, polRes, commRes]) => {
+      if (insRes.error) { setErr(insRes.error.message); return; }
+      const policies = polRes.data || [];
+      const commissions = commRes.data || [];
+      const mapped = (insRes.data || []).map((i, idx) => {
+        const own = policies.filter((p) => p.insurer_id === i.id);
+        const activas = own.filter((p) => p.status === "active");
+        const ingreso = own.reduce((s, p) => s + Number(p.premium_total || 0), 0);
+        const comisionInsurer = commissions.filter((c) => c.insurer_id === i.id).reduce((s, c) => s + Number(c.net_amount || 0), 0);
+        return { name: i.name, polizas: activas.length, ingreso, comision: comisionInsurer, rendimiento: 0, color: PALETTE[idx % PALETTE.length] };
+      });
+      setInsurerRows(mapped);
+      setTotals({
+        ventas: policies.reduce((s, p) => s + Number(p.premium_total || 0), 0),
+        comisionesAcum: commissions.reduce((s, c) => s + Number(c.net_amount || 0), 0),
+        ingresosAcum: commissions.filter((c) => c.status === "collected").reduce((s, c) => s + Number(c.net_amount || 0), 0),
+      });
+      setLive(true);
+    });
+  }, []);
+
   return (
     <div>
-      <PageHeader title="Centro Financiero de Inteligencia" subtitle="Rendimiento consolidado de la operación y de tus aseguradoras." right={<PrimaryButton icon={RefreshCw}>Actualizar</PrimaryButton>} />
+      <PageHeader title="Centro Financiero de Inteligencia" subtitle={live ? "Datos en vivo desde Supabase (policies + commissions)." : err ? `No se pudo leer reportes: ${err}` : "Rendimiento consolidado de la operación y de tus aseguradoras."} right={<PrimaryButton icon={RefreshCw}>Actualizar</PrimaryButton>} />
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
         <div className="space-y-5 md:col-span-8">
           <Card title="Rendimiento Financiero y Crecimiento" icon={TrendingUp}>
             <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-              <StatCard label="Ventas Totales" value="$0" />
-              <StatCard label="Comisiones Acumuladas" value="$0" />
-              <StatCard label="Ingresos Acumulados" value="$0" />
-              <StatCard label="Ganancia Neta" value="$0" />
+              <StatCard label="Ventas Totales" value={`$${totals.ventas.toLocaleString()}`} />
+              <StatCard label="Comisiones Acumuladas" value={`$${totals.comisionesAcum.toLocaleString()}`} />
+              <StatCard label="Ingresos Acumulados" value={`$${totals.ingresosAcum.toLocaleString()}`} />
+              <StatCard label="Ganancia Neta" value={`$${totals.ingresosAcum.toLocaleString()}`} sub="Sin gastos operativos registrados todavía" />
             </div>
             {REVENUE_TREND.length === 0 ? (
               <EmptyState icon={TrendingUp} title="Sin historial financiero" subtitle="La tendencia de ingresos y gastos se graficará aquí a medida que existan operaciones registradas." />
@@ -781,7 +907,7 @@ function ReportesPage() {
           </Card>
 
           <Card title="Aseguradoras: Rendimiento y Comisiones" icon={Building2}>
-            {INSURERS.length === 0 ? (
+            {insurerRows.length === 0 ? (
               <EmptyState icon={Building2} title="Sin aseguradoras con actividad" subtitle="Conecta o registra pólizas con tus aseguradoras para ver su rendimiento aquí." />
             ) : (
             <table className="w-full text-sm">
@@ -795,7 +921,7 @@ function ReportesPage() {
                 </tr>
               </thead>
               <tbody>
-                {INSURERS.map((i, idx) => (
+                {insurerRows.map((i, idx) => (
                   <tr key={idx} className="border-b border-slate-50">
                     <td className="py-2.5 font-medium text-slate-700">{i.name}</td>
                     <td className="py-2.5 text-slate-500">{i.polizas}</td>
@@ -880,7 +1006,7 @@ function ClientesPage() {
     setLoading(true);
     supabase
       .from("contacts")
-      .select("*")
+      .select("id, name, phone, email, customer_status, updated_at, policies(id)")
       .order("created_at", { ascending: false })
       .limit(50)
       .then(({ data, error }) => {
@@ -889,12 +1015,12 @@ function ClientesPage() {
         if (data && data.length > 0) {
           setRows(
             data.map((c) => ({
-              nombre: c.name || c.full_name || "Sin nombre",
-              telefono: c.phone || c.whatsapp_number || "—",
+              nombre: c.name || "Sin nombre",
+              telefono: c.phone || "—",
               correo: c.email || "—",
-              polizas: c.policy_count ?? "—",
-              ultimo: c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleString() : "—",
-              estado: c.status || "Activo",
+              polizas: c.policies?.length ?? 0,
+              ultimo: c.updated_at ? new Date(c.updated_at).toLocaleString() : "—",
+              estado: c.customer_status || "Activo",
             }))
           );
           setLive(true);
@@ -945,39 +1071,120 @@ function ClientesPage() {
 }
 
 function PolizasPage() {
+  const [rows, setRows] = useState(POLICIES);
+  const [live, setLive] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("policies")
+      .select("id, policy_number, status, premium_total, currency, end_date, contacts(name, phone), insurers(name), products(name)")
+      .order("created_at", { ascending: false })
+      .limit(50)
+      .then(({ data, error }) => {
+        if (error) { setErr(error.message); return; }
+        if (data) {
+          setRows(data.map((p) => ({
+            id: p.policy_number || p.id.slice(0, 8),
+            cliente: p.contacts?.name || p.contacts?.phone || "—",
+            tipo: p.products?.name || "—",
+            aseguradora: p.insurers?.name || "—",
+            prima: `$${p.premium_total} ${p.currency}`,
+            renovacion: p.end_date ? new Date(p.end_date).toLocaleDateString() : "—",
+            estado: POLICY_STATUS_LABEL[p.status] || p.status,
+          })));
+          setLive(true);
+        }
+      });
+  }, []);
+
   return (
     <TablePage
       title="Pólizas"
-      subtitle="Cobertura activa gestionada a través de tus aseguradoras conectadas."
+      subtitle={live ? "Datos en vivo desde Supabase (tabla policies)." : err ? `No se pudo leer policies: ${err}` : "Cobertura activa gestionada a través de tus aseguradoras conectadas."}
       columns={["ID", "Cliente", "Tipo", "Aseguradora", "Prima", "Renovación", "Estado"]}
       badgeCol="Estado"
-      rows={POLICIES.map((p) => ({ id: p.id, cliente: p.cliente, tipo: p.tipo, aseguradora: p.aseguradora, prima: p.prima, renovacion: p.renovacion, estado: p.estado }))}
+      rows={rows}
     />
   );
 }
 
 function CobranzasPage() {
+  const [rows, setRows] = useState(COLLECTIONS);
+  const [live, setLive] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("payments")
+      .select("id, amount, currency, due_date, status, contacts(name, phone), policies(policy_number)")
+      .order("due_date", { ascending: true })
+      .limit(50)
+      .then(({ data, error }) => {
+        if (error) { setErr(error.message); return; }
+        if (data) {
+          setRows(data.map((p) => ({
+            cliente: p.contacts?.name || p.contacts?.phone || "—",
+            poliza: p.policies?.policy_number || "—",
+            monto: `$${p.amount} ${p.currency}`,
+            vence: p.due_date ? new Date(p.due_date).toLocaleDateString() : "—",
+            estado: PAYMENT_STATUS_LABEL[p.status] || p.status,
+          })));
+          setLive(true);
+        }
+      });
+  }, []);
+
   return (
     <TablePage
       title="Cobranzas"
-      subtitle="Pagos próximos y vencidos con recordatorios automáticos por WhatsApp."
+      subtitle={live ? "Datos en vivo desde Supabase (tabla payments)." : err ? `No se pudo leer payments: ${err}` : "Pagos próximos y vencidos con recordatorios automáticos por WhatsApp."}
       columns={["Cliente", "Póliza", "Monto", "Vence", "Estado"]}
       badgeCol="Estado"
-      rows={COLLECTIONS}
+      rows={rows}
     />
   );
 }
 
 function CitasPage() {
+  const [rows, setRows] = useState(APPOINTMENTS);
+  const [live, setLive] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("appointments")
+      .select("id, title, purpose, starts_at, status, contacts(name, phone)")
+      .order("starts_at", { ascending: true })
+      .limit(30)
+      .then(({ data, error }) => {
+        if (error) { setErr(error.message); return; }
+        if (data) {
+          setRows(data.map((a) => ({
+            id: a.id,
+            hora: a.starts_at ? new Date(a.starts_at).toLocaleString() : "—",
+            modo: APPT_STATUS_LABEL[a.status] || a.status,
+            cliente: a.contacts?.name || a.contacts?.phone || "—",
+            tipo: a.purpose || a.title || "Cita",
+          })));
+          setLive(true);
+        }
+      });
+  }, []);
+
   return (
     <div>
-      <PageHeader title="Citas" subtitle="Agenda sincronizada con Google Calendar vía n8n." right={<PrimaryButton icon={Plus}>Nueva Cita</PrimaryButton>} />
-      {APPOINTMENTS.length === 0 ? (
+      <PageHeader title="Citas" subtitle={live ? "Datos en vivo desde Supabase (tabla appointments)." : "Agenda sincronizada con Google Calendar vía n8n."} right={<PrimaryButton icon={Plus}>Nueva Cita</PrimaryButton>} />
+      {err && <p className="mb-3 text-xs text-red-500">No se pudo leer appointments: {err}</p>}
+      {rows.length === 0 ? (
         <EmptyState icon={Calendar} title="Sin citas agendadas" subtitle="Las citas sincronizadas desde Google Calendar aparecerán aquí." />
       ) : (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {APPOINTMENTS.map((a, i) => (
-          <Card key={i}>
+        {rows.map((a) => (
+          <Card key={a.id}>
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-slate-700">{a.hora}</span>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">{a.modo}</span>
@@ -993,14 +1200,44 @@ function CitasPage() {
 }
 
 function AseguradorasPage() {
+  const [rows, setRows] = useState(INSURERS);
+  const [live, setLive] = useState(false);
+  const [err, setErr] = useState("");
+  const PALETTE = ["#2563eb", "#0ea5e9", "#6366f1", "#0d9488", "#7c3aed", "#f59e0b", "#ef4444", "#10b981", "#64748b"];
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    Promise.all([
+      supabase.from("insurers").select("id, name, status, commission_default_pct").order("name"),
+      supabase.from("policies").select("insurer_id, premium_total, status"),
+    ]).then(([insRes, polRes]) => {
+      if (insRes.error) { setErr(insRes.error.message); return; }
+      const policies = polRes.data || [];
+      const mapped = (insRes.data || []).map((i, idx) => {
+        const own = policies.filter((p) => p.insurer_id === i.id);
+        const activas = own.filter((p) => p.status === "active");
+        const ingreso = own.reduce((s, p) => s + Number(p.premium_total || 0), 0);
+        return {
+          name: i.name,
+          polizas: activas.length,
+          ingreso,
+          comision: Math.round(ingreso * (Number(i.commission_default_pct || 0) / 100)),
+          color: PALETTE[idx % PALETTE.length],
+        };
+      });
+      setRows(mapped);
+      setLive(true);
+    });
+  }, []);
+
   return (
     <div>
-      <PageHeader title="Aseguradoras" subtitle="Compañías conectadas y su rendimiento en la operación." right={<PrimaryButton icon={Plus}>Conectar Aseguradora</PrimaryButton>} />
-      {INSURERS.length === 0 ? (
+      <PageHeader title="Aseguradoras" subtitle={live ? "Datos en vivo desde Supabase (tablas insurers + policies)." : err ? `No se pudo leer insurers: ${err}` : "Compañías conectadas y su rendimiento en la operación."} right={<PrimaryButton icon={Plus}>Conectar Aseguradora</PrimaryButton>} />
+      {rows.length === 0 ? (
         <EmptyState icon={Building2} title="Sin aseguradoras con actividad" subtitle="Las aseguradoras con pólizas o cotizaciones reales aparecerán aquí con su rendimiento." />
       ) : (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-        {INSURERS.map((i, idx) => (
+        {rows.map((i, idx) => (
           <Card key={idx}>
             <div className="flex items-center gap-3">
               <div className="grid h-10 w-10 place-items-center rounded-xl text-white font-semibold" style={{ backgroundColor: i.color }}>{i.name[0]}</div>
@@ -1022,12 +1259,43 @@ function AseguradorasPage() {
 }
 
 function ComisionesPage() {
+  const [rows, setRows] = useState(COMMISSIONS);
+  const [live, setLive] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("commissions")
+      .select("id, net_amount, status, insurers(name)")
+      .then(({ data, error }) => {
+        if (error) { setErr(error.message); return; }
+        if (data) {
+          const byInsurer = {};
+          for (const c of data) {
+            const name = c.insurers?.name || "—";
+            if (!byInsurer[name]) byInsurer[name] = { aseguradora: name, acumulada: 0, pendiente: 0, count: 0 };
+            byInsurer[name].count += 1;
+            if (c.status === "collected") byInsurer[name].acumulada += Number(c.net_amount || 0);
+            else byInsurer[name].pendiente += Number(c.net_amount || 0);
+          }
+          setRows(Object.values(byInsurer).map((r) => ({
+            aseguradora: r.aseguradora,
+            acumulada: `$${r.acumulada.toLocaleString()}`,
+            pendiente: `$${r.pendiente.toLocaleString()}`,
+            tasa: `${r.count} comisión(es)`,
+          })));
+          setLive(true);
+        }
+      });
+  }, []);
+
   return (
     <TablePage
       title="Comisiones"
-      subtitle="Comisión acumulada y pendiente por aseguradora."
+      subtitle={live ? "Datos en vivo desde Supabase (tabla commissions)." : err ? `No se pudo leer commissions: ${err}` : "Comisión acumulada y pendiente por aseguradora."}
       columns={["Aseguradora", "Acumulada", "Pendiente", "Tasa"]}
-      rows={COMMISSIONS.map((c) => ({ aseguradora: c.aseguradora, acumulada: `$${c.acumulada.toLocaleString()}`, pendiente: `$${c.pendiente.toLocaleString()}`, tasa: c.tasa }))}
+      rows={rows}
     />
   );
 }
