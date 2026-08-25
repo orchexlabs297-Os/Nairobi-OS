@@ -723,7 +723,10 @@ function CotizacionesPage() {
     if (!isSupabaseConfigured) return;
     supabase
       .from("quotes")
-      .select("id, status, created_at, contacts(name, phone), quote_lines(id, premium, coverage_sum, commission_pct, rank, unavailable_reason, insurers(name))")
+      // quote_lines!quote_lines_quote_id_fkey desambigua: hay dos relaciones
+      // entre quotes y quote_lines (quote_lines.quote_id → quotes.id, y
+      // quotes.best_line_id → quote_lines.id) y PostgREST no puede elegir sola.
+      .select("id, status, created_at, contacts(name, phone), quote_lines!quote_lines_quote_id_fkey(id, premium, coverage_sum, commission_pct, rank, unavailable_reason, insurers(name))")
       .order("created_at", { ascending: false })
       .limit(1)
       .then(({ data, error }) => {
