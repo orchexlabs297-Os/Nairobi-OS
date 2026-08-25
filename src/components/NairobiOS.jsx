@@ -604,11 +604,82 @@ function MensajesPage() {
   );
 }
 
+// Modal genérico para los formularios "crear X" que hablan con W8. Nunca
+// escribe directo a Supabase — solo hace POST al webhook de n8n
+// correspondiente (misma arquitectura que ConfiguracionPage/MensajesPage).
+function CreateModal({ title, fields, resource, onClose, onCreated }) {
+  const [values, setValues] = useState(Object.fromEntries(fields.map((f) => [f.name, f.default || ""])));
+  const [status, setStatus] = useState("idle"); // idle | loading | success | error
+  const [errMsg, setErrMsg] = useState("");
+
+  async function submit() {
+    setStatus("loading");
+    try {
+      const res = await callAppWebApi(resource, values);
+      if (!res?.ok) throw new Error(res?.error || "n8n respondió sin éxito");
+      setStatus("success");
+      onCreated?.();
+      setTimeout(onClose, 900);
+    } catch (e) {
+      setStatus("error");
+      setErrMsg(e.message);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-50"><X size={16} /></button>
+        </div>
+        <div className="space-y-3">
+          {fields.map((f) => (
+            <div key={f.name}>
+              <label className="mb-1 block text-xs font-medium text-slate-500">{f.label}</label>
+              {f.type === "select" ? (
+                <select
+                  value={values[f.name]}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+                >
+                  {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              ) : (
+                <input
+                  type={f.type || "text"}
+                  placeholder={f.placeholder}
+                  value={values[f.name]}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={submit}
+          disabled={status === "loading"}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+        >
+          {status === "loading" ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+          Crear
+        </button>
+        {status === "success" && <p className="mt-2 text-center text-xs text-emerald-600">Creado correctamente.</p>}
+        {status === "error" && <p className="mt-2 text-center text-xs text-red-500">No se pudo crear: {errMsg}</p>}
+        {!N8N_APP_WEB_URL && <p className="mt-2 text-center text-xs text-amber-600">VITE_N8N_APP_WEB_URL no configurado — este formulario no puede llegar a n8n.</p>}
+      </div>
+    </div>
+  );
+}
+
 function SiniestrosPage() {
   const [rows, setRows] = useState(CLAIMS);
   const [selected, setSelected] = useState(null);
   const [live, setLive] = useState(false);
   const [err, setErr] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -633,14 +704,28 @@ function SiniestrosPage() {
         setRows(mapped);
         setLive(true);
       });
-  }, []);
+  }, [reloadTick]);
 
   return (
     <div>
+      {showCreate && (
+        <CreateModal
+          title="Crear Nuevo Siniestro"
+          resource="claim-create"
+          fields={[
+            { name: "chat_id", label: "Teléfono del cliente (debe existir en Clientes)", placeholder: "584121234567" },
+            { name: "incident_type", label: "Tipo de siniestro", placeholder: "choque, robo, incendio..." },
+            { name: "description", label: "Descripción", placeholder: "Qué pasó" },
+            { name: "severity", label: "Severidad", type: "select", options: ["unknown", "minor", "moderate", "severe", "fatal"], default: "unknown" },
+          ]}
+          onClose={() => setShowCreate(false)}
+          onCreated={() => setReloadTick((t) => t + 1)}
+        />
+      )}
       <PageHeader
         title="Centro de Siniestros"
         subtitle={live ? "Datos en vivo desde Supabase (tabla claims)." : "Listado de siniestros (claims list) supervisado por Nai."}
-        right={<PrimaryButton icon={Plus}>Crear Nuevo Siniestro</PrimaryButton>}
+        right={<PrimaryButton icon={Plus} onClick={() => setShowCreate(true)}>Crear Nuevo Siniestro</PrimaryButton>}
       />
       {err && <p className="mb-3 text-xs text-red-500">No se pudo leer claims: {err}</p>}
       {rows.length === 0 ? (
@@ -998,6 +1083,18 @@ function TablePage({ title, subtitle, columns, rows, badgeCol }) {
   );
 }
 
+// Mismo criterio que la compuerta de W2 (D016, workflows/w2_cerebro_nai.json,
+// nodo "Aplicar compuerta") — un contacto solo cuenta como cliente si al
+// menos un mensaje suyo mostró una señal real de negocio. Filtra el ruido de
+// gente que le escribe al número personalmente sin preguntar por un seguro
+// (ver ORCHEX-BRAIN/02_PROJECTS/Nairobi/CASOS_ARCHIVADOS.md para un caso real).
+const ACCIONES_NEGOCIO = ["quote", "register_claim", "payment_information", "schedule", "emergency_protocol"];
+const INTENTS_NEGOCIO = ["quote_request", "claim_report", "payment_inquiry", "policy_question", "appointment_request", "renewal", "cancellation"];
+function esSenalDeNegocio(cls) {
+  if (!cls) return false;
+  return cls.scope === "business" || ACCIONES_NEGOCIO.includes(cls.recommended_action) || INTENTS_NEGOCIO.includes(cls.intent);
+}
+
 function ClientesPage() {
   const [rows, setRows] = useState([]);
   const [live, setLive] = useState(false);
@@ -1009,15 +1106,19 @@ function ClientesPage() {
     setLoading(true);
     supabase
       .from("contacts")
-      .select("id, name, phone, email, customer_status, updated_at, policies(id)")
+      .select("id, name, phone, email, customer_status, updated_at, policies(id), conversations(messages(metadata))")
       .order("created_at", { ascending: false })
       .limit(50)
       .then(({ data, error }) => {
         setLoading(false);
         if (error) { setErr(error.message); return; }
         if (data && data.length > 0) {
+          const clientesReales = data.filter((c) =>
+            (c.policies?.length ?? 0) > 0 ||
+            (c.conversations || []).some((cv) => (cv.messages || []).some((m) => esSenalDeNegocio(m.metadata?.classification)))
+          );
           setRows(
-            data.map((c) => ({
+            clientesReales.map((c) => ({
               nombre: c.name || "Sin nombre",
               telefono: c.phone || "—",
               correo: c.email || "—",
@@ -1037,7 +1138,7 @@ function ClientesPage() {
         title="Clientes"
         subtitle={
           live
-            ? "Datos en vivo desde Supabase (tabla contacts)."
+            ? "Datos en vivo desde Supabase — solo contactos con señal real de negocio (cotización, siniestro, póliza, pago) o al menos una póliza."
             : isSupabaseConfigured
             ? loading ? "Cargando desde Supabase…" : err ? `No se pudo leer contacts: ${err}` : "Sin registros en Supabase todavía."
             : "Base de contactos sincronizada desde WhatsApp vía WaAPI (conecta Supabase en .env)."
@@ -1045,7 +1146,7 @@ function ClientesPage() {
         right={<PrimaryButton icon={Plus}>Añadir</PrimaryButton>}
       />
       {rows.length === 0 ? (
-        <EmptyState icon={Users} title="Sin clientes registrados" subtitle="Los contactos que lleguen por WhatsApp vía n8n aparecerán aquí automáticamente." />
+        <EmptyState icon={Users} title="Sin clientes registrados" subtitle="Los contactos que pregunten por un seguro, cotización, siniestro o pago aparecerán aquí — el resto del tráfico personal al número se filtra." />
       ) : (
       <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200/70">
         <table className="w-full text-sm">
