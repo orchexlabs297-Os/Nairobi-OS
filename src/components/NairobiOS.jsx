@@ -234,7 +234,7 @@ function Sidebar({ active, setActive, open, setOpen }) {
             <X size={18} />
           </button>
         </div>
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
           {NAV.map((item) => {
             const Icon = item.icon;
             const isActive = active === item.id;
@@ -1447,11 +1447,16 @@ function ComisionesPage() {
 
 /* ------------------------------ CONFIGURACIÓN ------------------------------ */
 
+// El backend real (n8n, W1/W2) usa Evolution API — esta lista es solo para
+// el evento config-update opcional que este panel puede mandar a n8n; no
+// cambia el proveedor real. Evolution API va primero y como default para
+// no dar la impresión de que el sistema corre sobre WaAPI (abandonado).
 const WHATSAPP_PROVIDERS = [
-  { id: "waapi", label: "WaAPI" },
+  { id: "evolution_api", label: "Evolution API (en uso ahora)" },
   { id: "meta_cloud_api", label: "Meta Cloud API (oficial)" },
   { id: "twilio", label: "Twilio WhatsApp" },
   { id: "gupshup", label: "Gupshup" },
+  { id: "waapi", label: "WaAPI (abandonado, no usar)" },
 ];
 
 function IntegrationRow({ label, description, placeholder, value, setValue, secret, testable, icon: Icon, readOnly, providerSelect, provider, setProvider }) {
@@ -1594,7 +1599,7 @@ function SystemStatusCard() {
 
 function ConfiguracionPage() {
   const [n8nUrl, setN8nUrl] = useState(import.meta.env.VITE_N8N_APP_WEB_URL || "");
-  const [waapiProvider, setWaapiProvider] = useState("waapi");
+  const [waapiProvider, setWaapiProvider] = useState("evolution_api");
   const [waapiKey, setWaapiKey] = useState("");
   const [calendarId, setCalendarId] = useState("");
   const [saveStatus, setSaveStatus] = useState("idle"); // idle | loading | success | error
@@ -1675,9 +1680,13 @@ function ConfiguracionPage() {
 
         <div className="space-y-5 md:col-span-4">
           <SystemStatusCard />
-          <Card title="Estado del Sistema" icon={CircleDot}>
+          <Card title="Config. de este panel (opcional)" icon={CircleDot}>
+            <p className="mb-2 text-[11px] text-slate-400">
+              No es el estado real del backend — eso está arriba, en "Estado real de Nai". Esto
+              solo refleja si llenaste los campos de esta pantalla para el evento config-update.
+            </p>
             <div className="space-y-2.5 text-sm">
-              {[["Motor n8n", n8nUrl ? "Configurado" : "Pendiente"], ["WhatsApp", waapiKey ? "Configurado" : "Pendiente"], ["Supabase", isSupabaseConfigured ? "Configurado" : "Pendiente"]].map(([l, s], i) => (
+              {[["Webhook de n8n (este formulario)", n8nUrl ? "Configurado" : "Pendiente"], ["Token de WhatsApp (este formulario)", waapiKey ? "Configurado" : "Pendiente"], ["Supabase (real, desde .env)", isSupabaseConfigured ? "Configurado" : "Pendiente"]].map(([l, s], i) => (
                 <div key={i} className="flex items-center justify-between">
                   <span className="text-slate-600">{l}</span>
                   <StatusBadge status={s === "Configurado" ? "Activo" : "Próximo"} />
