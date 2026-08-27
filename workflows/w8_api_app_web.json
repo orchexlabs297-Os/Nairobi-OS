@@ -1,0 +1,1315 @@
+{
+  "name": "Nairobi OS · 08 API App Web",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/config-update",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        420
+      ],
+      "id": "w8-webhook-config-update",
+      "name": "Webhook config-update",
+      "webhookId": "4d8e1f-nairobi-os-w8-config-update",
+      "notes": "R018 (2026-08-25): n8n 2.33.3 no registra rutas de webhook con segmentos dinámicos (:resource) en producción — verificado en aislamiento. Se partió el webhook único en uno literal por recurso; cada uno responde solo a su ruta exacta.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/reminder-send-now",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        280
+      ],
+      "id": "w8-webhook-reminder-send-now",
+      "name": "Webhook reminder-send-now",
+      "webhookId": "4d8e1f-nairobi-os-w8-reminder-send-now",
+      "notes": "R018 (2026-08-25): n8n 2.33.3 no registra rutas de webhook con segmentos dinámicos (:resource) en producción — verificado en aislamiento. Se partió el webhook único en uno literal por recurso; cada uno responde solo a su ruta exacta.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/claim-update",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        140
+      ],
+      "id": "w8-webhook-claim-update",
+      "name": "Webhook claim-update",
+      "webhookId": "4d8e1f-nairobi-os-w8-claim-update",
+      "notes": "R018 (2026-08-25): n8n 2.33.3 no registra rutas de webhook con segmentos dinámicos (:resource) en producción — verificado en aislamiento. Se partió el webhook único en uno literal por recurso; cada uno responde solo a su ruta exacta.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/appointment",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        0
+      ],
+      "id": "w8-webhook-appointment",
+      "name": "Webhook appointment",
+      "webhookId": "4d8e1f-nairobi-os-w8-appointment",
+      "notes": "R018 (2026-08-25): n8n 2.33.3 no registra rutas de webhook con segmentos dinámicos (:resource) en producción — verificado en aislamiento. Se partió el webhook único en uno literal por recurso; cada uno responde solo a su ruta exacta.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/policy",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        -140
+      ],
+      "id": "w8-webhook-policy",
+      "name": "Webhook policy",
+      "webhookId": "4d8e1f-nairobi-os-w8-policy",
+      "notes": "R018 (2026-08-25): n8n 2.33.3 no registra rutas de webhook con segmentos dinámicos (:resource) en producción — verificado en aislamiento. Se partió el webhook único en uno literal por recurso; cada uno responde solo a su ruta exacta.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/escalation-resolve",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        -280
+      ],
+      "id": "w8-webhook-escalation-resolve",
+      "name": "Webhook escalation-resolve",
+      "webhookId": "4d8e1f-nairobi-os-w8-escalation-resolve",
+      "notes": "R018 (2026-08-25): n8n 2.33.3 no registra rutas de webhook con segmentos dinámicos (:resource) en producción — verificado en aislamiento. Se partió el webhook único en uno literal por recurso; cada uno responde solo a su ruta exacta.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/bot-toggle",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        -420
+      ],
+      "id": "w8-webhook-bot-toggle",
+      "name": "Webhook bot-toggle",
+      "webhookId": "4d8e1f-nairobi-os-w8-bot-toggle",
+      "notes": "R018 (2026-08-25): n8n 2.33.3 no registra rutas de webhook con segmentos dinámicos (:resource) en producción — verificado en aislamiento. Se partió el webhook único en uno literal por recurso; cada uno responde solo a su ruta exacta.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/send-message",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        -560
+      ],
+      "id": "w8-webhook-send-message",
+      "name": "Webhook send-message",
+      "webhookId": "4d8e1f-nairobi-os-w8-send-message",
+      "notes": "R018 (2026-08-25): n8n 2.33.3 no registra rutas de webhook con segmentos dinámicos (:resource) en producción — verificado en aislamiento. Se partió el webhook único en uno literal por recurso; cada uno responde solo a su ruta exacta.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/quote",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        -700
+      ],
+      "id": "w8-webhook-quote",
+      "name": "Webhook quote",
+      "webhookId": "4d8e1f-nairobi-os-w8-quote",
+      "notes": "R018 (2026-08-25): n8n 2.33.3 no registra rutas de webhook con segmentos dinámicos (:resource) en producción — verificado en aislamiento. Se partió el webhook único en uno literal por recurso; cada uno responde solo a su ruta exacta.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "nairobiOsW3Cotizad01"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "contact_chat_id": "={{ $json.body.contact_chat_id }}",
+            "product_code": "={{ $json.body.product_code }}",
+            "inputs_json": "={{ $json.body.inputs_json }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -1920,
+        -700
+      ],
+      "id": "w8-n03-quote",
+      "name": "POST quote → W3",
+      "notes": "workflowId vacío — resuelto: apunta a nairobiOsW3Cotizad01 (Nairobi OS · 03 Cotizador Comparativo).",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with target as (\n  select cv.id as conversation_id, c.phone\n  from public.conversations cv\n  join public.contacts c on c.id = cv.contact_id\n  where c.phone = regexp_replace($1, '\\D', '', 'g') and cv.status <> 'resolved'\n  order by cv.created_at desc limit 1\n)\ninsert into public.messages (conversation_id, direction, message_type, message_text, metadata)\nselect target.conversation_id, 'outbound', 'chat', $2, jsonb_build_object('sent_by', 'nairobi', 'is_test', coalesce($3::boolean, false))\nfrom target\nreturning conversation_id, (select phone from target) as chat_id, $2 as message_text;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.chat_id, $json.body.message, $json.body.is_test] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        -560
+      ],
+      "id": "w8-n04-registrar-mensaje-nairobi",
+      "name": "POST send-message → registrar",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.conversations\nset should_respond = false,\n    metadata = jsonb_set(coalesce(metadata,'{}'::jsonb), '{paused_until}', to_jsonb((now() + (coalesce($2::int, 60)::text || ' minutes')::interval)::text))\nwhere id = $1\nreturning id;",
+        "options": {
+          "queryReplacement": "={{ [$json.conversation_id, $('Webhook send-message').item.json.body.pause_minutes] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1780,
+        -560
+      ],
+      "id": "w8-n04b-pausar-bot",
+      "name": "Pausar bot 60 min",
+      "notes": "Recomendación pendiente de confirmar con Sebastián (NEXT_STEPS.md): un mensaje manual de Nairobi pausa el bot por defecto 60 min para no cruzarse con Nai en la misma conversación.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://evolution-api:8080/message/sendText/nairobi-os",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: ($('POST send-message → registrar').item.json.chat_id || '').toString().replace(/\\D/g, ''), text: $('POST send-message → registrar').item.json.message_text }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1640,
+        -560
+      ],
+      "id": "w8-n04c-enviar-waapi",
+      "name": "Enviar WhatsApp (Evolution)",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SnHjtoJOJ0HG2mCe",
+          "name": "Evolution API saliente"
+        }
+      },
+      "notes": "Migrado de WaAPI a Evolution API v2 el 2026-08-23 (R014). Endpoint /message/sendText/{instancia}, body {number, text} — el número va en dígitos, sin @c.us. Credencial 'Evolution API saliente' (header apikey). JSON.stringify evita romper el body con comillas o saltos de línea.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.conversations cv\nset should_respond = $2::boolean\nfrom public.contacts c\nwhere cv.contact_id = c.id and c.phone = regexp_replace($1, '\\D', '', 'g')\nreturning cv.id, c.phone as chat_id, cv.should_respond as bot_enabled;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.chat_id, $json.body.bot_enabled] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        -420
+      ],
+      "id": "w8-n05-bot-toggle",
+      "name": "POST bot-toggle",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with resolved as (\n  update public.escalations\n  set status = 'resolved', resolved_at = now(), resolution_note = $2\n  where id = $1\n  returning conversation_id\n)\nupdate public.conversations c\nset should_respond = true, status = 'active', metadata = c.metadata - 'paused_until'\nfrom resolved r\nwhere c.id = r.conversation_id\nreturning c.id, (select phone from public.contacts where id = c.contact_id) as chat_id, c.should_respond as bot_enabled;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.escalation_id, $json.body.resolution_note || null] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        -280
+      ],
+      "id": "w8-n06-escalation-resolve",
+      "name": "POST escalation-resolve",
+      "notes": "Al resolver, reactiva el bot automáticamente (should_respond=true, status='active', limpia metadata.paused_until) — Nairobi ya no necesita mantenerlo pausado manualmente.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body;\nconst freq = b.payment_frequency || 'annual';\nconst n = { single: 1, monthly: 12, quarterly: 4, semiannual: 2, annual: 1 }[freq] || 1;\nconst amountEach = Math.round((b.premium_total / n) * 100) / 100;\nconst start = new Date(b.start_date);\nconst monthsStep = { single: 0, monthly: 1, quarterly: 3, semiannual: 6, annual: 12 }[freq] || 12;\nconst installments = [];\nfor (let i = 0; i < n; i++) {\n  const d = new Date(start);\n  d.setMonth(d.getMonth() + monthsStep * i);\n  installments.push({ installment_no: i + 1, amount: amountEach, due_date: d.toISOString().slice(0,10) });\n}\nreturn [{ json: { ...b, installments } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1920,
+        -140
+      ],
+      "id": "w8-n07-calcular-installments",
+      "name": "POST policy → calcular cuotas",
+      "notes": "Determinista: divide premium_total entre las cuotas según payment_frequency. No usa LLM."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.policies (contact_id, insurer_id, product_id, quote_id, policy_number, status, premium_total, currency, payment_frequency, start_date, end_date, commission_pct)\nselect c.id, $2, $3, $4, $5, 'active', $6, coalesce($7,'USD'), $8, $9, $10, coalesce($11, i.commission_default_pct)\nfrom public.contacts c, public.insurers i\nwhere c.phone = regexp_replace($1, '\\D', '', 'g') and i.id = $2\nreturning id, contact_id, currency;",
+        "options": {
+          "queryReplacement": "={{ [$json.chat_id, $json.insurer_id, $json.product_id, $json.quote_id || null, $json.policy_number || null, $json.premium_total, $json.currency, $json.payment_frequency, $json.start_date, $json.end_date, $json.commission_pct || null] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1680,
+        -140
+      ],
+      "id": "w8-n08-insertar-poliza",
+      "name": "Insertar póliza",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const policy = $json; // id, contact_id, currency (de 'Insertar póliza')\nconst installments = $('POST policy → calcular cuotas').item.json.installments;\nreturn installments.map(i => ({ json: {\n  policy_id: policy.id,\n  contact_id: policy.contact_id,\n  installment_no: i.installment_no,\n  amount: i.amount,\n  currency: policy.currency,\n  due_date: i.due_date\n}}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1560,
+        -140
+      ],
+      "id": "w8-n08b-preparar-filas-pago",
+      "name": "Preparar filas de pago",
+      "notes": "Un Code node puede devolver múltiples items directamente — así 'Insertar calendario de pagos' recibe un item por cuota y n8n lo inserta uno por uno automáticamente."
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "value": "public"
+        },
+        "table": {
+          "value": "payments"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1440,
+        -140
+      ],
+      "id": "w8-n09-insertar-pagos",
+      "name": "Insertar calendario de pagos",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { policy_id: $input.first().json.policy_id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1320,
+        -140
+      ],
+      "id": "w8-n09b-reducir-a-una-policy",
+      "name": "Reducir a 1 item (policy)",
+      "notes": "Code node corre una sola vez para TODOS los items de entrada (default runOnceForAllItems) — reduce las N filas de pago insertadas a 1 solo item con policy_id, para que el siguiente INSERT de comisiones no se dispare N veces (evita duplicar comisiones por cuota)."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.commissions (policy_id, insurer_id, gross_amount, pct, net_amount, currency, status, period)\nselect $1, (select insurer_id from public.policies where id = $1),\n       amount, (select commission_pct from public.policies where id = $1),\n       round(amount * (select commission_pct from public.policies where id = $1) / 100, 2),\n       (select currency from public.policies where id = $1), 'accrued', due_date\nfrom public.payments where policy_id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$json.policy_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1200,
+        -140
+      ],
+      "id": "w8-n10-generar-comisiones",
+      "name": "Generar comisiones por cuota",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select count(*)::int as solapes from public.appointments\nwhere status in ('scheduled','confirmed')\n  and tstzrange(starts_at, ends_at) && tstzrange($1::timestamptz, $2::timestamptz);",
+        "options": {
+          "queryReplacement": "={{ [$('Webhook appointment').item.json.body.starts_at, $('Webhook appointment').item.json.body.ends_at] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        0
+      ],
+      "id": "w8-n11-check-solape",
+      "name": "POST appointment → verificar solape",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ov1",
+              "leftValue": "={{ $json.solapes }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1680,
+        0
+      ],
+      "id": "w8-n12-if-solape",
+      "name": "¿Hay solape?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.appointments (contact_id, title, purpose, starts_at, ends_at, status)\nselect c.id, $2, $3, $4::timestamptz, $5::timestamptz, 'scheduled'\nfrom public.contacts c where c.phone = regexp_replace($1, '\\D', '', 'g')\nreturning id, starts_at, ends_at;",
+        "options": {
+          "queryReplacement": "={{ [$('Webhook appointment').item.json.body.chat_id, $('Webhook appointment').item.json.body.title, $('Webhook appointment').item.json.body.purpose, $('Webhook appointment').item.json.body.starts_at, $('Webhook appointment').item.json.body.ends_at] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1440,
+        60
+      ],
+      "id": "w8-n13-insertar-cita",
+      "name": "Insertar cita",
+      "notes": "El constraint 'no_overlap' (exclude using gist) en public.appointments es la capa dura final incluso si esta verificación previa tuviera una condición de carrera. Crear el evento en Google Calendar (nodo googleCalendar, no tool) es un paso posterior pendiente de credencial googleCalendarOAuth2Api (Fase 9) — guardar luego gcal_event_id con un UPDATE.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.claims set status = $2, amount_paid = coalesce($3, amount_paid), updated_at = now()\nwhere id = $1\nreturning id, status;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.claim_id, $json.body.status, $json.body.amount_paid || null] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        140
+      ],
+      "id": "w8-n14-claim-update",
+      "name": "POST claim-update",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.reminders set scheduled_for = now() where id = $1 returning id;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.reminder_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        280
+      ],
+      "id": "w8-n15-reminder-send-now",
+      "name": "POST reminder-send-now",
+      "notes": "Solo adelanta scheduled_for a 'ahora' — el envío real ocurre en la próxima corrida horaria de W6 (o se puede forzar disparando W6 manualmente). Mantiene una sola fuente de lógica de envío en vez de duplicarla aquí.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, data: $json } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -960,
+        0
+      ],
+      "id": "w8-n16-responder-ok",
+      "name": "Responder OK"
+    },
+    {
+      "parameters": {
+        "jsCode": "// El panel manda { event, payload: { n8n_webhook?, whatsapp?, google_calendar? } }.\n// Nunca debe llegar un token/secreto real aca (viven en el Credentials Store de n8n),\n// pero se filtra por si acaso antes de guardarlo en integration_settings.\nconst SECRET_KEYS = ['token', 'apikey', 'api_key', 'secret', 'password', 'authorization'];\nfunction stripSecrets(obj) {\n  const clean = {};\n  for (const [k, v] of Object.entries(obj || {})) {\n    if (SECRET_KEYS.some(s => k.toLowerCase().includes(s))) continue;\n    clean[k] = v;\n  }\n  return clean;\n}\n\nconst payload = $json.body?.payload || {};\nconst rows = [];\n\nif (payload.n8n_webhook) {\n  rows.push({\n    integration_type: 'n8n_webhook',\n    provider: null,\n    is_active: !!payload.n8n_webhook.is_active,\n    metadata: stripSecrets(payload.n8n_webhook)\n  });\n}\nif (payload.whatsapp) {\n  rows.push({\n    integration_type: 'whatsapp',\n    provider: payload.whatsapp.provider || null,\n    is_active: !!payload.whatsapp.is_active,\n    metadata: stripSecrets(payload.whatsapp)\n  });\n}\nif (payload.google_calendar) {\n  rows.push({\n    integration_type: 'google_calendar',\n    provider: null,\n    is_active: !!payload.google_calendar.is_active,\n    metadata: stripSecrets(payload.google_calendar)\n  });\n}\n\nreturn rows.map(r => ({ json: r }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1920,
+        560
+      ],
+      "id": "w8-n21-config-rows",
+      "name": "Preparar filas integration_settings"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.integration_settings\n  (integration_type, provider, is_active, status, metadata, last_checked_at, updated_by)\nvalues ($1, $2, $3, 'pending', $4::jsonb, now(), 'panel')\non conflict (integration_type, coalesce(provider, ''))\ndo update set\n  provider = excluded.provider,\n  is_active = excluded.is_active,\n  status = 'pending',\n  metadata = excluded.metadata,\n  last_checked_at = now(),\n  updated_by = 'panel',\n  updated_at = now()\nreturning id, integration_type, provider, is_active, status;",
+        "options": {
+          "queryReplacement": "={{ [$json.integration_type, $json.provider, $json.is_active, JSON.stringify($json.metadata)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1780,
+        560
+      ],
+      "id": "w8-n22-upsert-config",
+      "name": "Upsert integration_settings",
+      "notes": "Escribe solo metadata operativa (provider/is_active/status), nunca secretos. status siempre vuelve a 'pending' al guardar desde el panel -- confirmar 'connected' es responsabilidad de un chequeo real aparte (fuera de alcance de esta ronda), no de este nodo.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/claim-create",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        -840
+      ],
+      "id": "w8-webhook-claim-create",
+      "name": "Webhook claim-create",
+      "webhookId": "4d8e1f-nairobi-os-w8-claim-create",
+      "notes": "Nuevo (2026-08-25): faltaba un recurso para CREAR un siniestro (claim-update solo actualiza uno existente). Pedido por Sebastián para el botón 'Crear Nuevo Siniestro' del panel web.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.claims (contact_id, incident_type, description, severity, status)\nselect c.id, $2, $3, coalesce($4, 'unknown'), 'reported'\nfrom public.contacts c where c.phone = regexp_replace($1, '\\D', '', 'g')\nreturning id, claim_number, status;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.chat_id, $json.body.incident_type, $json.body.description, $json.body.severity] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -2160,
+        -840
+      ],
+      "id": "w8-n18-claim-create",
+      "name": "POST claim-create → insertar",
+      "notes": "chat_id debe ser un teléfono de un contacto EXISTENTE (público.contacts) — si el cliente es nuevo, primero hay que registrarlo (ver 'Añadir' en Clientes, todavía sin recurso propio).",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/contact-create",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        -980
+      ],
+      "id": "w8-webhook-contact-create",
+      "name": "Webhook contact-create",
+      "webhookId": "4d8e1f-nairobi-os-w8-contact-create",
+      "notes": "Nuevo (2026-08-25): registrar un cliente manualmente desde el botón 'Añadir' del panel. Antes solo se creaban contactos automáticamente cuando escribían por WhatsApp (W1).",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.contacts (phone, name, email, customer_status, metadata)\nvalues (regexp_replace($1, '\\D', '', 'g'), $2, $3, coalesce($4, 'Activo'), jsonb_build_object('source', 'panel_manual'))\non conflict (phone) do update set name = coalesce(excluded.name, contacts.name),\n  email = coalesce(excluded.email, contacts.email), updated_at = now()\nreturning id, phone, name;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.phone, $json.body.name || null, $json.body.email || null, $json.body.customer_status] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -2160,
+        -980
+      ],
+      "id": "w8-n19-contact-create",
+      "name": "POST contact-create → insertar",
+      "notes": "Idempotente por phone (unique constraint) — si ya existe, actualiza nombre/correo en vez de duplicar.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.id ? { ok: true, data: $json } : { ok: false, error: 'No existe un cliente con ese teléfono. Agrégalo primero en la sección Clientes.' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -960,
+        120
+      ],
+      "id": "w8-n34-responder-creacion",
+      "name": "Responder creación",
+      "notes": "Los insert...select devuelven 0 filas si el teléfono no está en contacts. Con alwaysOutputData el item llega vacío: aquí se traduce a un error legible en vez de un 200 mudo (R019)."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: 'Ya hay una cita agendada que se solapa con ese horario.' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -1440,
+        -60
+      ],
+      "id": "w8-n35-responder-solape",
+      "name": "Responder solape",
+      "notes": "Antes el solape caía en 'Responder OK' y devolvía ok:true sin haber agendado nada — el panel lo mostraba como éxito."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.error ? { ok: false, error: $json.error } : { ok: true, data: $json } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -960,
+        -700
+      ],
+      "id": "w8-n36-responder-quote",
+      "name": "Responder cotización",
+      "notes": "Si W3 falla, el panel debe ver el motivo real en vez de un 200 mudo."
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/insurer-status",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        700
+      ],
+      "id": "w8-n37-webhook-insurer",
+      "name": "Webhook insurer-status",
+      "webhookId": "4d8e1f-nairobi-os-w8-insurer-status",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      },
+      "notes": "Nairobi marca desde el panel con qué aseguradoras tiene afiliación vigente. El cotizador (W3) solo consulta las que están en status='active'."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.insurers set status = $2 where id = $1::uuid returning id, name, status;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.insurer_id, $json.body.status] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        700
+      ],
+      "id": "w8-n38-post-insurer",
+      "name": "POST insurer-status",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.id ? { ok: true, data: $json } : { ok: false, error: 'No se encontró esa aseguradora.' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -960,
+        700
+      ],
+      "id": "w8-n39-responder-insurer",
+      "name": "Responder insurer-status",
+      "notes": "El update devuelve 0 filas si el insurer_id no existe. Con alwaysOutputData el item llega vacío: se traduce a error legible en vez de un 200 mudo."
+    }
+  ],
+  "connections": {
+    "POST quote → W3": {
+      "main": [
+        [
+          {
+            "node": "Responder cotización",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST send-message → registrar": {
+      "main": [
+        [
+          {
+            "node": "Pausar bot 60 min",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pausar bot 60 min": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (Evolution)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST bot-toggle": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST escalation-resolve": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST policy → calcular cuotas": {
+      "main": [
+        [
+          {
+            "node": "Insertar póliza",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar póliza": {
+      "main": [
+        [
+          {
+            "node": "Preparar filas de pago",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar filas de pago": {
+      "main": [
+        [
+          {
+            "node": "Insertar calendario de pagos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar calendario de pagos": {
+      "main": [
+        [
+          {
+            "node": "Reducir a 1 item (policy)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reducir a 1 item (policy)": {
+      "main": [
+        [
+          {
+            "node": "Generar comisiones por cuota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar comisiones por cuota": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST appointment → verificar solape": {
+      "main": [
+        [
+          {
+            "node": "¿Hay solape?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay solape?": {
+      "main": [
+        [
+          {
+            "node": "Responder solape",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insertar cita",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar cita": {
+      "main": [
+        [
+          {
+            "node": "Responder creación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST claim-update": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST reminder-send-now": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar filas integration_settings": {
+      "main": [
+        [
+          {
+            "node": "Upsert integration_settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert integration_settings": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp (Evolution)": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook quote": {
+      "main": [
+        [
+          {
+            "node": "POST quote → W3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook send-message": {
+      "main": [
+        [
+          {
+            "node": "POST send-message → registrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook bot-toggle": {
+      "main": [
+        [
+          {
+            "node": "POST bot-toggle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook escalation-resolve": {
+      "main": [
+        [
+          {
+            "node": "POST escalation-resolve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook policy": {
+      "main": [
+        [
+          {
+            "node": "POST policy → calcular cuotas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook appointment": {
+      "main": [
+        [
+          {
+            "node": "POST appointment → verificar solape",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook claim-update": {
+      "main": [
+        [
+          {
+            "node": "POST claim-update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook reminder-send-now": {
+      "main": [
+        [
+          {
+            "node": "POST reminder-send-now",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook config-update": {
+      "main": [
+        [
+          {
+            "node": "Preparar filas integration_settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook claim-create": {
+      "main": [
+        [
+          {
+            "node": "POST claim-create → insertar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST claim-create → insertar": {
+      "main": [
+        [
+          {
+            "node": "Responder creación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook contact-create": {
+      "main": [
+        [
+          {
+            "node": "POST contact-create → insertar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST contact-create → insertar": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook insurer-status": {
+      "main": [
+        [
+          {
+            "node": "POST insurer-status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST insurer-status": {
+      "main": [
+        [
+          {
+            "node": "Responder insurer-status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "errorWorkflow": "nairobiOsW9ErrorHd01"
+  },
+  "pinData": {},
+  "tags": [],
+  "id": "nairobiOsW8ApiWeb001"
+}

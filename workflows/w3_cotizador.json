@@ -1,0 +1,831 @@
+{
+  "name": "Nairobi OS · 03 Cotizador Comparativo",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "contact_chat_id",
+              "type": "string"
+            },
+            {
+              "name": "product_code",
+              "type": "string"
+            },
+            {
+              "name": "inputs_json",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2400,
+        0
+      ],
+      "id": "w3-n01-trigger",
+      "name": "Entrada (tool)",
+      "notes": "Se invoca como toolWorkflow desde el Agente Nai (W2) y directo desde W8 (API app web) cuando Nairobi cotiza a mano. FIX 2026-08-16 (Vision, D011): 'contact_chat_id' acepta tanto el chat_id de WaAPI (con @c.us) como el teléfono limpio — la query de 'Crear quote (draft)' le quita cualquier carácter no numérico antes de buscar en contacts.phone, así que no importa cuál de los dos formatos mande el que llama."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select rating_factors from public.products where code = $1 and is_active = true;",
+        "options": {
+          "queryReplacement": "={{ [$json.product_code] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -2160,
+        0
+      ],
+      "id": "w3-n02-get-product",
+      "name": "Obtener rating_factors del producto",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const factors = $('Obtener rating_factors del producto').item.json.rating_factors || [];\nconst trigger = $('Entrada (tool)').item.json;\nlet inputs = {};\ntry { inputs = JSON.parse(trigger.inputs_json || '{}'); } catch (e) { inputs = {}; }\n\nconst missing = factors.filter(f => inputs[f] === undefined || inputs[f] === null || inputs[f] === '');\n\nreturn [{\n  json: {\n    ok: missing.length === 0,\n    missing_fields: missing,\n    inputs,\n    contact_chat_id: trigger.contact_chat_id,\n    product_code: trigger.product_code\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1920,
+        0
+      ],
+      "id": "w3-n03-validar",
+      "name": "Validar datos requeridos",
+      "notes": "Si faltan campos, NO se crea cotización (§Cotizador en ARCHITECTURE.md). Nai le pide al cliente exactamente los campos que faltan."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "v1",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1680,
+        0
+      ],
+      "id": "w3-n04-if-completo",
+      "name": "¿Datos completos?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ni1",
+              "name": "result",
+              "value": "=need_more_info",
+              "type": "string"
+            },
+            {
+              "id": "ni2",
+              "name": "missing_fields",
+              "value": "={{ $json.missing_fields }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -1440,
+        -160
+      ],
+      "id": "w3-n05-need-more-info",
+      "name": "Salida: need_more_info"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.quotes (contact_id, product_id, inputs, status)\nselect c.id, p.id, $3::jsonb, 'draft'\nfrom public.contacts c, public.products p\nwhere c.phone = regexp_replace($1, '\\D', '', 'g') and p.code = $2\nreturning id;",
+        "options": {
+          "queryReplacement": "={{ [$json.contact_chat_id, $json.product_code, JSON.stringify($json.inputs)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1440,
+        80
+      ],
+      "id": "w3-n06-crear-quote",
+      "name": "Crear quote (draft)",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select i.id as insurer_id, i.code as insurer_code, i.api_enabled, i.api_base_url, i.api_auth_type,\n       coalesce(rr.commission_pct, i.commission_default_pct) as commission_pct,\n       rr.base_premium, rr.coverage_sum, rr.deductible, rr.coverage_items, rt.source\nfrom public.insurers i\nleft join public.rate_tables rt\n       on rt.insurer_id = i.id and rt.is_active\n      and rt.product_id = (select id from public.products where code = $1)\n      and current_date between rt.valid_from and coalesce(rt.valid_to,'9999-12-31')\nleft join lateral (\n  select * from public.rate_rows r\n   where r.rate_table_id = rt.id\n     and (r.criteria->>'age_min' is null or (($2::jsonb->>'edad')::int) >= (r.criteria->>'age_min')::int)\n     and (r.criteria->>'age_max' is null or (($2::jsonb->>'edad')::int) <= (r.criteria->>'age_max')::int)\n     and (r.criteria->>'cc_max'  is null or (($2::jsonb->>'cc')::int)   <= (r.criteria->>'cc_max')::int)\n     and (r.criteria->>'cc_min'  is null or (($2::jsonb->>'cc')::int)   >= (r.criteria->>'cc_min')::int)\n   order by r.priority limit 1\n) rr on true\nwhere i.status = 'active';",
+        "options": {
+          "queryReplacement": "={{ [$('Validar datos requeridos').item.json.product_code, JSON.stringify($('Validar datos requeridos').item.json.inputs)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1200,
+        80
+      ],
+      "id": "w3-n07-resolver-tarifas",
+      "name": "Resolver tarifas (aseguradoras activas)",
+      "notes": "DINÁMICO por diseño (D007 en DECISIONS.md): where i.status='active', sin número fijo. Genera una fila por aseguradora activa, tenga o no tarifa. El matching de criterios es genérico vía JSONB — funciona para cualquier producto sin tocar esta query.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "api1",
+              "leftValue": "={{ $json.api_enabled }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -960,
+        80
+      ],
+      "id": "w3-n08-if-api",
+      "name": "¿Aseguradora con API activa?",
+      "notes": "Capa de adaptación (D003): hoy las 8 tienen api_enabled=false, esta rama no se ejecuta para ninguna todavía — existe para cuando se active la primera integración real."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.api_base_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "inputs",
+              "value": "={{ JSON.stringify($('Validar datos requeridos').item.json.inputs) }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 1000,
+        "onError": "continueRegularOutput"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -720,
+        -40
+      ],
+      "id": "w3-n09-llamar-api-aseguradora",
+      "name": "Consultar API aseguradora",
+      "notes": "onError: continueRegularOutput — si falla, el siguiente Code cae al valor de tabla como 'estimate'. No hay ninguna aseguradora con api_enabled=true hoy; este nodo no se ejecuta en la práctica todavía (D003)."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const line = $json;\nconst apiOk = line.statusCode && line.statusCode < 400 && line.body?.premium;\nif (apiOk) return { json: { ...line, premium: line.body.premium, source: 'api' } };\n// Fallback controlado: tarifa de tabla si existe, marcada como estimate\nif (line.base_premium != null) return { json: { ...line, premium: line.base_premium, source: 'estimate' } };\nreturn { json: { ...line, premium: null, source: 'unavailable' } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        -40
+      ],
+      "id": "w3-n10-fallback-api",
+      "name": "Fallback si la API falla",
+      "notes": "runOnceForEachItem: el código razona sobre una línea de aseguradora por vez."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const line = $json;\nif (line.base_premium != null) {\n  return { json: { ...line, premium: line.base_premium, source: line.source || 'manual' } };\n}\nreturn { json: { ...line, premium: null, source: 'unavailable' } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        200
+      ],
+      "id": "w3-n11-usar-tabla",
+      "name": "Usar tarifa de tabla",
+      "notes": "runOnceForEachItem: el código razona sobre una línea de aseguradora por vez."
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        -240,
+        80
+      ],
+      "id": "w3-n12-merge",
+      "name": "Unir ramas",
+      "notes": "append, no combine: las dos ramas producen líneas de aseguradora que solo hay que concatenar. Con combineAll, si una rama viene vacía (hoy siempre: ninguna aseguradora tiene API) el resultado era 0 items y el flujo moría sin error."
+    },
+    {
+      "parameters": {
+        "jsCode": "const lines = $input.all().map(i => i.json);\nconst available = lines.filter(l => l.premium != null);\navailable.sort((a, b) => a.premium - b.premium);\navailable.forEach((l, idx) => { l.rank = idx + 1; });\nlines.forEach(l => {\n  if (l.premium != null) {\n    l.commission_amount = Math.round((l.premium * (l.commission_pct || 0) / 100) * 100) / 100;\n  } else {\n    l.commission_amount = null;\n    l.rank = null;\n    l.unavailable_reason = l.source === 'unavailable' ? 'sin_tarifa_vigente' : null;\n  }\n});\nreturn lines.map(l => ({ json: l }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        80
+      ],
+      "id": "w3-n13-comision-rank",
+      "name": "Calcular comisión y rank",
+      "notes": "Determinista, sin LLM (principio rector: IA decide, n8n ejecuta — el dinero nunca lo calcula el modelo)."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.quote_lines\n  (quote_id, insurer_id, source, premium, coverage_sum, deductible, coverage_items,\n   commission_pct, commission_amount, rank, unavailable_reason)\nvalues ($1::uuid, $2::uuid, $3, $4::numeric, $5::numeric, $6::numeric,\n        coalesce($7::jsonb, '{}'::jsonb), $8::numeric, $9::numeric, $10::int, $11)\nreturning id;",
+        "options": {
+          "queryReplacement": "={{ [ $('Crear quote (draft)').first().json.id, $json.insurer_id, $json.source || 'unavailable', $json.premium ?? null, $json.coverage_sum ?? null, $json.deductible ?? null, JSON.stringify($json.coverage_items || {}), $json.commission_pct ?? null, $json.commission_amount ?? null, $json.rank ?? null, $json.unavailable_reason ?? null ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        240,
+        80
+      ],
+      "id": "w3-n14-insertar-lineas",
+      "name": "Insertar quote_lines",
+      "notes": "executeQuery en vez de operation:insert — el resourceMapper del nodo pedía columns.mappingMode y la config traía un string plano, que rompía la ejecución.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with agg as (\n  select count(*) filter (where premium is not null) as disponibles,\n         count(*) as total,\n         (select id from public.quote_lines where quote_id = $1 and premium is not null order by rank asc limit 1) as best_id,\n         array_agg(insurer_id) filter (where premium is null) as faltantes\n  from public.quote_lines where quote_id = $1\n)\nupdate public.quotes q\nset status = case\n              when agg.disponibles = agg.total then 'completed'\n              when agg.disponibles = 0 then 'manual_pending'\n              else 'partial'\n            end,\n    best_line_id = agg.best_id,\n    missing_insurers = coalesce((select array_agg(code) from public.insurers where id = any(agg.faltantes)), '{}')\nfrom agg\nwhere q.id = $1\nreturning q.id, q.status, q.missing_insurers, q.best_line_id;",
+        "options": {
+          "queryReplacement": "={{ [$('Crear quote (draft)').first().json.id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        480,
+        80
+      ],
+      "id": "w3-n15-determinar-estado",
+      "name": "Determinar estado (completed/partial/manual_pending)",
+      "notes": "Degradación elegante (§Cotizador en ARCHITECTURE.md): 0 disponibles → manual_pending, no se inventa nada.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "mp1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "manual_pending",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        720,
+        80
+      ],
+      "id": "w3-n16-if-manual-pending",
+      "name": "¿manual_pending?"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "nairobiOsW5Escalar01",
+          "cachedResultName": "Nairobi OS · 05 Escalación a Nairobi"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conversation_id": "={{ $json.conversation_id || '' }}",
+            "reason": "=Cotización sin tarifas disponibles (manual_pending)",
+            "urgency": "=normal",
+            "context_summary": "=Quote {{ $json.id }} para el producto {{ $('Entrada (tool)').item.json.product_code }}: ninguna aseguradora devolvió tarifa vigente."
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        960,
+        -40
+      ],
+      "id": "w3-n17-escalar",
+      "name": "Escalar a Nairobi (W5)",
+      "notes": "workflowId vacío — resuelto: apunta a nairobiOsW5Escalar01 (Nairobi OS · 05 Escalación a Nairobi).",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Producto: {{ $('Validar datos requeridos').item.json.product_code }}\nDatos del cliente: {{ JSON.stringify($('Validar datos requeridos').item.json.inputs) }}\nLíneas de cotización (ya calculadas, no las recalcules): {{ JSON.stringify($input.all().map(i => i.json)) }}\n\nRedacta una recomendación breve para WhatsApp (máx 4 líneas), en español, mencionando la mejor opción por relación cobertura/precio. Si faltan aseguradoras por confirmar, dilo. NUNCA inventes cifras distintas a las que te di.",
+        "options": {
+          "systemMessage": "Eres un analista de cotizaciones de seguros. Solo redactas y comparas texto a partir de números ya calculados — nunca calculas ni inventas primas. Sé breve y claro para WhatsApp."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        960,
+        200
+      ],
+      "id": "w3-n18-a2-analista",
+      "name": "A2 · Analista de Cotización"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-haiku-4-5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [
+        960,
+        400
+      ],
+      "id": "w3-n19-modelo-a2",
+      "name": "Haiku (A2)",
+      "notes": "Requiere credencial anthropicApi (Fase 7+). Modelo Haiku por política de costes (ARCHITECTURE.md §Agentes).",
+      "credentials": {
+        "anthropicApi": {
+          "id": "NO3FmdWxzEK1jpI9",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.quotes set recommendation = $2 where id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$('Crear quote (draft)').item.json.id, $json.text] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1200,
+        200
+      ],
+      "id": "w3-n20-guardar-recomendacion",
+      "name": "Guardar recomendación",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "out1",
+              "name": "quote_id",
+              "value": "={{ $('Crear quote (draft)').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "out2",
+              "name": "status",
+              "value": "={{ $('Determinar estado (completed/partial/manual_pending)').item.json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "out3",
+              "name": "recommendation",
+              "value": "={{ $('Guardar recomendación').item.json.recommendation || $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1440,
+        80
+      ],
+      "id": "w3-n21-salida-final",
+      "name": "Salida final (a Nai / W8)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "mp1",
+              "name": "quote_id",
+              "value": "={{ $('Determinar estado (completed/partial/manual_pending)').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "mp2",
+              "name": "status",
+              "value": "=manual_pending",
+              "type": "string"
+            },
+            {
+              "id": "mp3",
+              "name": "recommendation",
+              "value": "=Cotización registrada, pero ninguna aseguradora tiene tarifa vigente cargada para este producto. Nairobi la cotizará manualmente.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1080,
+        260
+      ],
+      "id": "w3-n22-salida-manual",
+      "name": "Salida: manual_pending"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Una cotización = un estado = una escalación, no una por aseguradora.\nreturn [$input.first()];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        160
+      ],
+      "id": "w3-n23-reducir",
+      "name": "Reducir a 1 item (quote)"
+    }
+  ],
+  "connections": {
+    "Entrada (tool)": {
+      "main": [
+        [
+          {
+            "node": "Obtener rating_factors del producto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener rating_factors del producto": {
+      "main": [
+        [
+          {
+            "node": "Validar datos requeridos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar datos requeridos": {
+      "main": [
+        [
+          {
+            "node": "¿Datos completos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos completos?": {
+      "main": [
+        [
+          {
+            "node": "Crear quote (draft)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Salida: need_more_info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear quote (draft)": {
+      "main": [
+        [
+          {
+            "node": "Resolver tarifas (aseguradoras activas)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver tarifas (aseguradoras activas)": {
+      "main": [
+        [
+          {
+            "node": "¿Aseguradora con API activa?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Aseguradora con API activa?": {
+      "main": [
+        [
+          {
+            "node": "Consultar API aseguradora",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Usar tarifa de tabla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar API aseguradora": {
+      "main": [
+        [
+          {
+            "node": "Fallback si la API falla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback si la API falla": {
+      "main": [
+        [
+          {
+            "node": "Unir ramas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usar tarifa de tabla": {
+      "main": [
+        [
+          {
+            "node": "Unir ramas",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Unir ramas": {
+      "main": [
+        [
+          {
+            "node": "Calcular comisión y rank",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular comisión y rank": {
+      "main": [
+        [
+          {
+            "node": "Insertar quote_lines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar quote_lines": {
+      "main": [
+        [
+          {
+            "node": "Reducir a 1 item (quote)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determinar estado (completed/partial/manual_pending)": {
+      "main": [
+        [
+          {
+            "node": "¿manual_pending?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿manual_pending?": {
+      "main": [
+        [
+          {
+            "node": "Escalar a Nairobi (W5)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "A2 · Analista de Cotización",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2 · Analista de Cotización": {
+      "main": [
+        [
+          {
+            "node": "Guardar recomendación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haiku (A2)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A2 · Analista de Cotización",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar recomendación": {
+      "main": [
+        [
+          {
+            "node": "Salida final (a Nai / W8)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalar a Nairobi (W5)": {
+      "main": [
+        [
+          {
+            "node": "Salida: manual_pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reducir a 1 item (quote)": {
+      "main": [
+        [
+          {
+            "node": "Determinar estado (completed/partial/manual_pending)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "errorWorkflow": "nairobiOsW9ErrorHd01"
+  },
+  "pinData": {},
+  "tags": [],
+  "id": "nairobiOsW3Cotizad01"
+}

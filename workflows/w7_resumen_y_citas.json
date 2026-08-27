@@ -1,0 +1,594 @@
+{
+  "name": "Nairobi OS · 07 Resumen Operativo",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2400,
+        0
+      ],
+      "id": "w7-n01-cron-diario",
+      "name": "Cada día 08:00",
+      "notes": "Nota operativa: la hora del cron corre en la TZ del contenedor n8n (America/New_York por defecto — ver PROJECT_STATE.md), NO necesariamente America/Caracas. Ajustar el cron o la variable TZ del contenedor al importar, para que 08:00 sea hora de Caracas de verdad."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.daily_metrics (metric_date, new_leads, quotes_created, policies_sold, gross_premium, commissions_accrued, commissions_collected, claims_opened, appointments_scheduled, overdue_amount, messages_processed, escalations_created, llm_tokens_in, llm_tokens_out)\nselect\n  (current_date - 1),\n  (select count(*) from public.contacts where created_at::date = current_date - 1),\n  (select count(*) from public.quotes where created_at::date = current_date - 1),\n  (select count(*) from public.policies where created_at::date = current_date - 1),\n  (select coalesce(sum(premium_total),0) from public.policies where created_at::date = current_date - 1),\n  (select coalesce(sum(net_amount),0) from public.commissions where created_at::date = current_date - 1),\n  (select coalesce(sum(net_amount),0) from public.commissions where status='collected' and collected_at::date = current_date - 1),\n  (select count(*) from public.claims where reported_at::date = current_date - 1),\n  (select count(*) from public.appointments where created_at::date = current_date - 1),\n  (select coalesce(sum(amount),0) from public.payments where status = 'overdue'),\n  (select count(*) from public.messages where created_at::date = current_date - 1),\n  (select count(*) from public.escalations where created_at::date = current_date - 1),\n  (select coalesce(sum(llm_tokens_in),0) from public.messages where created_at::date = current_date - 1),\n  (select coalesce(sum(llm_tokens_out),0) from public.messages where created_at::date = current_date - 1)\non conflict (metric_date) do update set\n  new_leads = excluded.new_leads, quotes_created = excluded.quotes_created, policies_sold = excluded.policies_sold,\n  gross_premium = excluded.gross_premium, commissions_accrued = excluded.commissions_accrued,\n  commissions_collected = excluded.commissions_collected, claims_opened = excluded.claims_opened,\n  appointments_scheduled = excluded.appointments_scheduled, overdue_amount = excluded.overdue_amount,\n  messages_processed = excluded.messages_processed, escalations_created = excluded.escalations_created,\n  llm_tokens_in = excluded.llm_tokens_in, llm_tokens_out = excluded.llm_tokens_out, computed_at = now()\nreturning *;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -2160,
+        0
+      ],
+      "id": "w7-n02-calcular-metricas",
+      "name": "Calcular métricas del día anterior",
+      "notes": "llm_cost_usd se deja fuera del cálculo automático aquí (depende de precios por token que cambian por modelo/proveedor) — se puede añadir después como columna calculada o actualizarla aparte.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select count(*) filter (where notified_at is null) as pendientes_sin_notificar,\n       count(*) filter (where status = 'open') as abiertas_total\nfrom public.escalations;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        -120
+      ],
+      "id": "w7-n03-escalaciones-pendientes",
+      "name": "Escalaciones pendientes",
+      "notes": "Recoge lo que quedó 'noche + no emergencia' sin notificar en tiempo real (W5) — esto es lo que W5 diseñó para entregar aquí en el digest de las 08:00, ARCHITECTURE.md §Humanidad nocturna.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select c.name as full_name, a.title, a.starts_at\nfrom public.appointments a join public.contacts c on c.id = a.contact_id\nwhere a.starts_at::date = current_date and a.status in ('scheduled','confirmed')\norder by a.starts_at asc;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        40
+      ],
+      "id": "w7-n04-citas-hoy",
+      "name": "Citas de hoy",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const metrics = $('Calcular métricas del día anterior').first().json;\nconst esc = $('Escalaciones pendientes').first().json;\nconst appts = $('Citas de hoy').all().map(i => i.json);\n\nlet text = `Buenos días, Nairobi. Resumen de ayer y hoy:\\n\\n`;\ntext += `Ayer: ${metrics.new_leads} leads nuevos, ${metrics.quotes_created} cotizaciones, ${metrics.policies_sold} pólizas vendidas (${metrics.gross_premium} en prima bruta).\\n`;\ntext += `Comisiones acumuladas ayer: ${metrics.commissions_accrued}. Mora total actual: ${metrics.overdue_amount}.\\n`;\nif (esc.abiertas_total > 0) text += `Tienes ${esc.abiertas_total} escalación(es) abierta(s)`;\nif (esc.pendientes_sin_notificar > 0) text += `, ${esc.pendientes_sin_notificar} de anoche que no te desperté.`;\nif (esc.abiertas_total > 0) text += ` Revísalas en la app.\\n`;\nif (appts.length > 0) {\n  text += `Citas de hoy:\\n` + appts.map(a => `- ${a.starts_at}: ${a.full_name} (${a.title})`).join('\\n');\n} else {\n  text += `Sin citas agendadas para hoy.`;\n}\nreturn [{ json: { digest_text: text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1440,
+        -40
+      ],
+      "id": "w7-n06-armar-digest",
+      "name": "Armar texto del digest",
+      "notes": "Determinista desde SQL, sin LLM. Lee 'Calcular métricas del día anterior' y 'Escalaciones pendientes' por referencia de nodo ($('...')), no por conexión main — evita usar un Merge node para 3 ramas de tamaños distintos (una fila agregada vs N citas), que desalinearía los items. Esas dos ramas quedan como terminales sin conexión de salida; igual se ejecutan al estar conectadas al cron."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select value #>> '{}' as nairobi_chat_id from public.settings where key = 'emergency_contact_phone';"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1200,
+        -40
+      ],
+      "id": "w7-n07-obtener-destino",
+      "name": "Obtener chat_id de Nairobi",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://evolution-api:8080/message/sendText/nairobi-os",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: ($json.nairobi_chat_id || '').toString().replace(/\\D/g, ''), text: $('Armar texto del digest').item.json.digest_text }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -960,
+        -40
+      ],
+      "id": "w7-n08-enviar-digest",
+      "name": "Enviar digest (Evolution)",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SnHjtoJOJ0HG2mCe",
+          "name": "Evolution API saliente"
+        }
+      },
+      "notes": "Migrado de WaAPI a Evolution API v2 el 2026-08-23 (R014). Endpoint /message/sendText/{instancia}, body {number, text} — el número va en dígitos, sin @c.us. Credencial 'Evolution API saliente' (header apikey). JSON.stringify evita romper el body con comillas o saltos de línea.",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "contact_chat_id",
+              "type": "string"
+            },
+            {
+              "name": "title",
+              "type": "string"
+            },
+            {
+              "name": "purpose",
+              "type": "string"
+            },
+            {
+              "name": "starts_at",
+              "type": "string"
+            },
+            {
+              "name": "ends_at",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2400,
+        280
+      ],
+      "id": "w7-n09-trigger-citas",
+      "name": "Entrada (tool: agendar_cita)",
+      "notes": "Segundo trigger dentro del mismo workflow — n8n permite múltiples nodos trigger en un archivo. Este es el destino real del tool 'agendar_cita' referenciado desde W2."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select count(*)::int as solapes from public.appointments\nwhere status in ('scheduled','confirmed')\n  and tstzrange(starts_at, ends_at) && tstzrange($1::timestamptz, $2::timestamptz);",
+        "options": {
+          "queryReplacement": "={{ [$json.starts_at, $json.ends_at] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -2160,
+        280
+      ],
+      "id": "w7-n10-check-solape",
+      "name": "Verificar solape",
+      "notes": "R019: la query anterior devolvia 'select id ...' y por tanto 0 filas cuando NO habia solape; un nodo Postgres con 0 filas emite 0 items y mataba todo el flujo, asi que agendar_cita nunca insertaba nada. Ahora siempre devuelve exactamente una fila.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "s1",
+              "leftValue": "={{ $json.solapes }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1920,
+        280
+      ],
+      "id": "w7-n11-if-solape",
+      "name": "¿Hay solape?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select to_char(slot_start, 'YYYY-MM-DD\"T\"HH24:MI:SSOF') as slot_start\nfrom (\n  select generate_series(\n    date_trunc('hour', now()) + interval '1 hour',\n    date_trunc('hour', now()) + interval '3 days',\n    interval '1 hour'\n  ) as slot_start\n) s\nwhere extract(hour from slot_start) between 8 and 18\nand not exists (\n  select 1 from public.appointments a\n  where a.status in ('scheduled','confirmed')\n  and tstzrange(a.starts_at, a.ends_at) && tstzrange(slot_start, slot_start + interval '1 hour')\n)\nlimit 3;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1680,
+        200
+      ],
+      "id": "w7-n12-sugerir-huecos",
+      "name": "Sugerir 3 huecos libres",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "alwaysOutputData": true,
+      "notes": "El alias de generate_series no se puede usar en el WHERE del mismo SELECT (column slot_start does not exist); va envuelto en subconsulta."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.appointments (contact_id, title, purpose, starts_at, ends_at, status)\nselect c.id, $2, $3, $4::timestamptz, $5::timestamptz, 'scheduled'\nfrom public.contacts c where c.phone = regexp_replace($1, '\\D', '', 'g')\nreturning id, starts_at, ends_at;",
+        "options": {
+          "queryReplacement": "={{ [$('Entrada (tool: agendar_cita)').item.json.contact_chat_id, $('Entrada (tool: agendar_cita)').item.json.title, $('Entrada (tool: agendar_cita)').item.json.purpose, $('Entrada (tool: agendar_cita)').item.json.starts_at, $('Entrada (tool: agendar_cita)').item.json.ends_at] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1680,
+        360
+      ],
+      "id": "w7-n13-insertar-cita",
+      "name": "Insertar cita en Postgres",
+      "notes": "alwaysOutputData: el insert...select devuelve 0 filas si el telefono no esta en contacts; sin esto el flujo moria en silencio y Nai no recibia respuesta.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "start": "={{ $('Entrada (tool: agendar_cita)').item.json.starts_at }}",
+        "end": "={{ $('Entrada (tool: agendar_cita)').item.json.ends_at }}",
+        "additionalFields": {
+          "summary": "={{ $('Entrada (tool: agendar_cita)').item.json.title }}",
+          "description": "={{ $('Entrada (tool: agendar_cita)').item.json.purpose }}"
+        },
+        "options": {
+          "timeZone": {
+            "__rl": true,
+            "mode": "list",
+            "value": "America/Caracas"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -1440,
+        360
+      ],
+      "id": "w7-n14-crear-evento-gcal",
+      "name": "Crear evento en Google Calendar",
+      "notes": "Deshabilitado: sin calendarId configurado, n8n marca el workflow entero como invalido (WorkflowHasIssuesError) y aborta antes de ejecutar, tumbando tambien el guardado de la cita. Reactivar cuando se elija el calendario de Nairobi.",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "tpDtgWTZDOuGB5nR",
+          "name": "Google Calendar account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.appointments set gcal_event_id = $2 where id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$('Insertar cita en Postgres').item.json.id, $json.id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1200,
+        360
+      ],
+      "id": "w7-n15-guardar-gcal-id",
+      "name": "Guardar gcal_event_id",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "disabled": true,
+      "notes": "Deshabilitado: sin calendarId configurado, n8n marca el workflow entero como invalido (WorkflowHasIssuesError) y aborta antes de ejecutar, tumbando tambien el guardado de la cita. Reactivar cuando se elija el calendario de Nairobi."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "booked",
+              "value": "={{ !!$('Insertar cita en Postgres').first().json.id }}",
+              "type": "boolean"
+            },
+            {
+              "id": "r2",
+              "name": "appointment_id",
+              "value": "={{ $('Insertar cita en Postgres').first().json.id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "r3",
+              "name": "error",
+              "value": "={{ $('Insertar cita en Postgres').first().json.id ? '' : 'No existe un cliente con ese telefono en la base; hay que registrarlo antes de agendar.' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -960,
+        360
+      ],
+      "id": "w7-n16-salida-ok",
+      "name": "Salida: cita creada"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r3",
+              "name": "booked",
+              "value": "=false",
+              "type": "boolean"
+            },
+            {
+              "id": "r4",
+              "name": "suggested_slots",
+              "value": "={{ $input.all().map(i => i.json.slot_start).filter(Boolean) }}",
+              "type": "array"
+            },
+            {
+              "id": "r5",
+              "name": "error",
+              "value": "=Ese horario ya esta ocupado.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -1440,
+        40
+      ],
+      "id": "w7-n17-salida-solape",
+      "name": "Salida: solape, huecos sugeridos",
+      "executeOnce": true,
+      "notes": "executeOnce: la rama de huecos trae hasta 3 items y sin esto Nai recibia la misma respuesta repetida 3 veces."
+    }
+  ],
+  "connections": {
+    "Cada día 08:00": {
+      "main": [
+        [
+          {
+            "node": "Calcular métricas del día anterior",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Escalaciones pendientes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Citas de hoy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Citas de hoy": {
+      "main": [
+        [
+          {
+            "node": "Armar texto del digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar texto del digest": {
+      "main": [
+        [
+          {
+            "node": "Obtener chat_id de Nairobi",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener chat_id de Nairobi": {
+      "main": [
+        [
+          {
+            "node": "Enviar digest (Evolution)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada (tool: agendar_cita)": {
+      "main": [
+        [
+          {
+            "node": "Verificar solape",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar solape": {
+      "main": [
+        [
+          {
+            "node": "¿Hay solape?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay solape?": {
+      "main": [
+        [
+          {
+            "node": "Sugerir 3 huecos libres",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insertar cita en Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sugerir 3 huecos libres": {
+      "main": [
+        [
+          {
+            "node": "Salida: solape, huecos sugeridos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar cita en Postgres": {
+      "main": [
+        [
+          {
+            "node": "Salida: cita creada",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Crear evento en Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear evento en Google Calendar": {
+      "main": [
+        [
+          {
+            "node": "Guardar gcal_event_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar gcal_event_id": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "errorWorkflow": "nairobiOsW9ErrorHd01"
+  },
+  "pinData": {},
+  "tags": [],
+  "id": "nairobiOsW7Resumen01"
+}
