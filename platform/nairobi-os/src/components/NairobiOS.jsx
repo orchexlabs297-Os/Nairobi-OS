@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Home, Users, FileText, ShieldCheck, AlertTriangle, DollarSign, Calendar,
-  MessageSquare, Building2, Percent, BarChart3, Settings, Bell, Search,
+  MessageSquare, Building2, Percent, BarChart3, Settings, Bell,
   Phone, Mail, Sparkles, Bot, CheckCircle2, Clock, TrendingUp, TrendingDown,
   Send, Paperclip, Smile, MoreVertical, ChevronRight, Plus, Filter, X,
   Link2, Zap, KeyRound, Save, RefreshCw, Star, Flag, ArrowUpRight,
@@ -263,7 +263,19 @@ function Sidebar({ active, setActive, open, setOpen }) {
   );
 }
 
-function TopBar({ title, onMenu, userEmail, onSignOut }) {
+function TopBar({ title, onMenu, userEmail, onSignOut, onBell }) {
+  // La campana mostraba un punto rojo fijo, sin nada detrás. Ahora cuenta
+  // escalaciones sin resolver reales y lleva a la bandeja al hacer clic.
+  const [pendientes, setPendientes] = useState(0);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("escalations")
+      .select("id", { count: "exact", head: true })
+      .is("resolved_at", null)
+      .then(({ count }) => setPendientes(count || 0));
+  }, []);
+
   const initials = (userEmail || "Usuario")
     .split(/[@ ]/)[0]
     .split(/[.\s]/)
@@ -277,15 +289,20 @@ function TopBar({ title, onMenu, userEmail, onSignOut }) {
         <button onClick={onMenu} className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-50 md:hidden">
           <Menu size={19} />
         </button>
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 ring-1 ring-slate-200/70 sm:w-72 sm:flex-none">
-          <Search size={14} className="shrink-0 text-slate-400" />
-          <input placeholder={`Buscar en ${title.toLowerCase()}...`} className="w-full min-w-0 bg-transparent text-sm text-slate-600 placeholder:text-slate-400 focus:outline-none" />
-        </div>
+        <h1 className="min-w-0 truncate text-sm font-semibold text-slate-600">{title}</h1>
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-        <button className="relative rounded-full p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600">
+        <button
+          onClick={onBell}
+          title={pendientes ? `${pendientes} escalación(es) sin resolver` : "Sin escalaciones pendientes"}
+          className="relative rounded-full p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+        >
           <Bell size={17} />
-          <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-red-500" />
+          {pendientes > 0 && (
+            <span className="absolute right-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-semibold text-white">
+              {pendientes > 9 ? "9+" : pendientes}
+            </span>
+          )}
         </button>
         <div className="flex items-center gap-2 rounded-full bg-slate-50 py-1 pl-1 pr-1 ring-1 ring-slate-200/70 sm:pr-2">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-[11px] font-semibold text-white">{initials}</div>
@@ -507,14 +524,30 @@ function MensajesPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [toggling, setToggling] = useState(false);
+  const [ocultas, setOcultas] = useState(0);
+  const [verTodas, setVerTodas] = useState(false);
+  const [borrador, setBorrador] = useState("");
+  const [enviando, setEnviando] = useState(false);
   const isMobile = useIsMobile();
+
+  // El WhatsApp que alimenta a Nai es un número personal: por él entran también
+  // conversaciones privadas (familia, amigos) que no son del negocio. La bandeja
+  // solo debe mostrar lo que es trabajo de la corredora — nadie que abra este
+  // panel tiene por qué leer los chats personales de nadie.
+  function esConversacionDeNegocio(c) {
+    if (c.metadata?.nai_enabled === true) return true;              // la compuerta la abrió
+    if ((c.contacts?.policies || []).length > 0) return true;       // cliente con póliza
+    return (c.messages || []).some(
+      (m) => m.direction === "outbound" || esSenalDeNegocio(m.metadata?.classification),
+    );
+  }
 
   function loadConversations() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     supabase
       .from("conversations")
-      .select("id, status, should_respond, metadata, created_at, contacts(phone), messages(id, message_text, direction, metadata, created_at)")
+      .select("id, status, should_respond, metadata, created_at, contacts(phone, policies(id)), messages(id, message_text, direction, metadata, created_at)")
       .order("created_at", { ascending: false })
       .order("created_at", { foreignTable: "messages", ascending: true })
       .limit(30)
@@ -522,7 +555,9 @@ function MensajesPage() {
         setLoading(false);
         if (error) { setErr(error.message); return; }
         if (!data) return;
-        const mapped = data.map((c) => {
+        const negocio = data.filter(esConversacionDeNegocio);
+        setOcultas(data.length - negocio.length);
+        const mapped = (verTodas ? data : negocio).map((c) => {
           const msgs = c.messages || [];
           const last = msgs[msgs.length - 1];
           return {
@@ -548,7 +583,7 @@ function MensajesPage() {
       });
   }
 
-  useEffect(() => { loadConversations(); }, []);
+  useEffect(() => { loadConversations(); }, [verTodas]);
 
   async function toggleBot(conv) {
     if (!conv?.telefono || conv.telefono === "—") return;
@@ -560,6 +595,26 @@ function MensajesPage() {
       setErr(`No se pudo cambiar el modo vía n8n: ${e.message}`);
     } finally {
       setToggling(false);
+    }
+  }
+
+  // Respuesta manual de Nairobi desde el panel. Sale por el mismo recurso
+  // send-message de W8 que ya usan Cotizaciones y Siniestros — el panel nunca
+  // habla con WhatsApp directamente.
+  async function enviarManual() {
+    const texto = borrador.trim();
+    if (!texto || !selected?.telefono || selected.telefono === "—") return;
+    setEnviando(true);
+    setErr("");
+    try {
+      const res = await callAppWebApi("send-message", { chat_id: selected.telefono, message: texto });
+      if (res.ok === false) throw new Error(res.error || "n8n rechazó el envío");
+      setBorrador("");
+      loadConversations();
+    } catch (e) {
+      setErr(`No se pudo enviar: ${e.message}`);
+    } finally {
+      setEnviando(false);
     }
   }
 
@@ -575,6 +630,19 @@ function MensajesPage() {
             : "Bandeja de entrada unificada de WhatsApp, supervisada por Nai (conecta Supabase en .env)."
         }
       />
+      {ocultas > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 ring-1 ring-inset ring-slate-200">
+          <ShieldCheck size={13} className="text-slate-400" />
+          <span>
+            {verTodas
+              ? `Mostrando también ${ocultas} conversación(es) personal(es), ajenas al negocio.`
+              : `${ocultas} conversación(es) personal(es) ocultas — solo se muestra lo que es trabajo de la corredora.`}
+          </span>
+          <button onClick={() => setVerTodas((v) => !v)} className="ml-auto font-medium text-slate-600 underline underline-offset-2">
+            {verTodas ? "Ocultarlas" : "Ver todas"}
+          </button>
+        </div>
+      )}
       {!selected ? (
         <EmptyState icon={MessageSquare} title="Sin conversaciones todavía" subtitle="En cuanto lleguen mensajes de WhatsApp a través de n8n, aparecerán aquí." />
       ) : (
@@ -636,14 +704,28 @@ function MensajesPage() {
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
               <Smile size={16} className="text-slate-400" />
               <Paperclip size={16} className="text-slate-400" />
-              <input placeholder="Escribe un mensaje... (respuesta manual — pendiente de conectar)" className="flex-1 bg-transparent text-sm focus:outline-none" disabled />
+              <input
+                value={borrador}
+                onChange={(e) => setBorrador(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !enviando) enviarManual(); }}
+                placeholder={enviando ? "Enviando…" : "Escribe un mensaje..."}
+                disabled={enviando}
+                className="flex-1 bg-transparent text-sm focus:outline-none"
+              />
               <div className="flex items-center gap-2 border-l border-slate-200 pl-2">
                 <Toggle
                   on={selected.should_respond}
                   onClick={() => !toggling && toggleBot(selected)}
                   label={toggling ? "..." : selected.should_respond ? "Automatizado" : "Manual"}
                 />
-                <button className="rounded-lg bg-blue-600 p-1.5 text-white opacity-50" disabled title="Envío manual pendiente de conectar"><Send size={14} /></button>
+                <button
+                  onClick={enviarManual}
+                  disabled={enviando || !borrador.trim()}
+                  title="Enviar por WhatsApp"
+                  className="rounded-lg bg-blue-600 p-1.5 text-white disabled:opacity-50"
+                >
+                  <Send size={14} />
+                </button>
               </div>
             </div>
           </div>
@@ -782,6 +864,17 @@ function SiniestrosPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const [aviso, setAviso] = useState("");
+  const [fEstado, setFEstado] = useState("");
+  const [fAseguradora, setFAseguradora] = useState("");
+  const [fTexto, setFTexto] = useState("");
+
+  const visibles = rows.filter((r) => {
+    if (fEstado && r.estado !== fEstado) return false;
+    if (fAseguradora && r.aseguradora !== fAseguradora) return false;
+    const q = fTexto.trim().toLowerCase();
+    if (q && !`${r.cliente} ${r.tipo} ${r.poliza}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
 
   // Avisa al cliente por WhatsApp en qué va su siniestro, usando el mismo
   // canal que Nai (W8 → send-message → Evolution). El panel no envía nada
@@ -853,10 +946,34 @@ function SiniestrosPage() {
       ) : (
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
         <div className="overflow-hidden overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200/70 md:col-span-9">
-          <div className="flex items-center gap-2 border-b border-slate-100 p-3">
-            <button className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500"><Filter size={13} />Estado</button>
-            <button className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500"><Building2 size={13} />Aseguradora</button>
-            <input placeholder="Filtrar..." className="ml-auto w-48 rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:outline-none" />
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
+            <span className="flex items-center gap-1.5 text-xs text-slate-400"><Filter size={13} />Filtrar</span>
+            <select
+              value={fEstado}
+              onChange={(e) => setFEstado(e.target.value)}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 focus:outline-none"
+            >
+              <option value="">Todos los estados</option>
+              {[...new Set(rows.map((r) => r.estado).filter(Boolean))].map((e) => (
+                <option key={e} value={e}>{e}</option>
+              ))}
+            </select>
+            <select
+              value={fAseguradora}
+              onChange={(e) => setFAseguradora(e.target.value)}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 focus:outline-none"
+            >
+              <option value="">Todas las aseguradoras</option>
+              {[...new Set(rows.map((r) => r.aseguradora).filter((a) => a && a !== "—"))].map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+            <input
+              value={fTexto}
+              onChange={(e) => setFTexto(e.target.value)}
+              placeholder="Buscar cliente o tipo..."
+              className="ml-auto w-48 rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:outline-none"
+            />
           </div>
           <table className="w-full text-sm">
             <thead>
@@ -871,7 +988,7 @@ function SiniestrosPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((c) => (
+              {visibles.map((c) => (
                 <tr
                   key={c.id}
                   onClick={() => setSelected(c)}
@@ -2089,7 +2206,7 @@ export default function NairobiOS({ session, onSignOut }) {
     <div className="flex h-screen w-full overflow-hidden bg-slate-50 font-sans text-slate-800" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" }}>
       <Sidebar active={active} setActive={setActive} open={sidebarOpen} setOpen={setSidebarOpen} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar title={titleMap[active]} onMenu={() => setSidebarOpen(true)} userEmail={session?.user?.email} onSignOut={onSignOut} />
+        <TopBar title={titleMap[active]} onMenu={() => setSidebarOpen(true)} userEmail={session?.user?.email} onSignOut={onSignOut} onBell={() => setActive("mensajes")} />
         <main className="flex-1 overflow-y-auto p-3 sm:p-6">{pages[active]}</main>
       </div>
     </div>

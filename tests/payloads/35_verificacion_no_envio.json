@@ -1,0 +1,17 @@
+{
+ "event": "messages.upsert",
+ "instance": "nairobi-os",
+ "data": {
+  "key": {
+   "remoteJid": "584125039292@s.whatsapp.net",
+   "fromMe": false,
+   "id": "3EB0R025VERIF"
+  },
+  "pushName": "Prueba",
+  "message": {
+   "conversation": "hola, cuanto cuesta el rcv de mi carro?"
+  },
+  "messageType": "conversation",
+  "messageTimestamp": "__NOW__"
+ }
+}

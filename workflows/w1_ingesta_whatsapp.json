@@ -1,0 +1,1010 @@
+{
+  "name": "Nairobi OS · 01 Ingesta WhatsApp",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-9f3a7b2c-wa-inbound",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        0
+      ],
+      "id": "w1-n01-webhook",
+      "name": "Webhook Evolution API",
+      "webhookId": "9f3a7b2c-nairobi-os-w1",
+      "notesInFlow": false,
+      "notes": "R006 resuelto: Evolution API es self-hosted (VPS propio), así que sí controlamos el header custom en su webhook saliente -- credencial 'Evolution API webhook entrante' (httpHeaderAuth, header x-evolution-secret) configurada tanto acá como en el webhook config de la instancia 'nairobi-os' de Evolution API. Path deliberadamente largo/no adivinable como capa extra. Pendiente: el nodo 'Normalizar payload Evolution API' sigue esperando el formato de WaAPI -- reescribirlo recién cuando se capture un payload real de un evento messages.upsert de Evolution API (no adivinar la forma).",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GzqvaZSyOuWkfEzQ",
+          "name": "Evolution API webhook entrante"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": true}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -2160,
+        -160
+      ],
+      "id": "w1-n02-ack",
+      "name": "ACK inmediato",
+      "notes": "Responde antes de procesar para evitar reintentos duplicados de WaAPI (§Robustez de W1 en ARCHITECTURE.md)."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "chat_id",
+              "value": "={{ $json.body.data.key.remoteJid || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a1b",
+              "name": "phone",
+              "value": "={{ (($json.body.data.key.remoteJidAlt || $json.body.data.key.remoteJid || '').replace(/\\D/g, '')) }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "wa_message_id",
+              "value": "={{ $json.body.data.key.id || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "from_me",
+              "value": "={{ $json.body.data.key.fromMe === true }}",
+              "type": "boolean"
+            },
+            {
+              "id": "a4",
+              "name": "msg_type",
+              "value": "={{ $json.body.data.message?.audioMessage ? ($json.body.data.message.audioMessage.ptt ? 'ptt' : 'audio') : ($json.body.data.messageType || 'conversation') }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "body_text",
+              "value": "={{ $json.body.data.message?.conversation || $json.body.data.message?.extendedTextMessage?.text || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "media_base64",
+              "value": "={{ '' }}",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "wa_timestamp",
+              "value": "={{ $json.body.data.messageTimestamp || null }}",
+              "type": "number"
+            },
+            {
+              "id": "a8",
+              "name": "raw_body",
+              "value": "={{ $json.body }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -2160,
+        40
+      ],
+      "id": "w1-n03-normalizar",
+      "name": "Normalizar payload Evolution API",
+      "notes": "Reescrito 2026-08-20 con la forma REAL confirmada (no inferida) via /chat/findMessages de Evolution API sobre la instancia 'nairobi-os' ya conectada: el mensaje real trae key.addressingMode='lid' -- remoteJid es un LID (identificador de privacidad de WhatsApp, no el numero real), el numero real esta en key.remoteJidAlt. phone prioriza remoteJidAlt y cae a remoteJid solo si no hay alt (contactos sin LID todavia). chat_id se deja con el remoteJid crudo (con sufijo) para que el guard de grupos (@g.us) siga funcionando iguel que antes -- asumido que los grupos no usan LID, no confirmado exhaustivamente. media_base64 queda vacio a propósito: a diferencia de WaAPI, Evolution API/Baileys NO manda el audio inline en el webhook -- hay que pedirlo aparte con /chat/getBase64FromMediaMessage usando la key del mensaje. Rama de audio de W1 (transcripción) queda pendiente de un nodo HTTP nuevo antes de activarse -- no asumir que funciona todavía."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "g1",
+              "leftValue": "={{ $json.from_me }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            },
+            {
+              "id": "g2",
+              "leftValue": "={{ $json.chat_id }}",
+              "rightValue": "@g.us",
+              "operator": {
+                "type": "string",
+                "operation": "endsWith"
+              }
+            },
+            {
+              "id": "g3",
+              "leftValue": "={{ $json.chat_id }}",
+              "rightValue": "status@broadcast",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "g4",
+              "leftValue": "={{ $json.wa_timestamp ? ($now.toSeconds() - $json.wa_timestamp) : 0 }}",
+              "rightValue": 300,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "g5",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isEmpty"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1920,
+        40
+      ],
+      "id": "w1-n04-guard",
+      "name": "Guard (descartar)",
+      "notes": "fromMe=true es el guard crítico (R007/RISKS.md) — sin él el bot se responde a sí mismo en bucle. Rama TRUE = descartar silenciosamente (grupos, broadcast, eco propio, reentregas viejas, payload sin phone). W1 no se activa hasta probar los escenarios en tests/."
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1680,
+        -120
+      ],
+      "id": "w1-n05-descartado",
+      "name": "Descartado (fin)",
+      "notes": "Rama TRUE del guard. No se persiste nada — decisión deliberada: estos mensajes no son señal útil y no deben inflar messages."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        -1680,
+        160
+      ],
+      "id": "w1-n06-dedup-local",
+      "name": "Dedup (across executions)",
+      "notes": "Primera capa de deduplicación, local a esta instancia n8n (se pierde si se recrea el contenedor). La capa real de verdad es el UNIQUE en messages.whatsapp_message_id, aplicado en el INSERT más adelante."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "audio1",
+              "leftValue": "={{ $json.msg_type }}",
+              "rightValue": "ptt",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1440,
+        160
+      ],
+      "id": "w1-n07-if-audio",
+      "name": "¿Es nota de voz?",
+      "notes": "Patrón verificado en N8N_AUDIT.md (_data.type == 'ptt')."
+    },
+    {
+      "parameters": {
+        "operation": "toBinary",
+        "sourceProperty": "media_base64",
+        "options": {
+          "fileName": "audio.ogg"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1200,
+        40
+      ],
+      "id": "w1-n08-tobinary",
+      "name": "Audio a binario"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "whisper-large-v3"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -960,
+        40
+      ],
+      "id": "w1-n09-transcribir",
+      "name": "Transcribir audio",
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "credentials": {
+        "openAiApi": {
+          "id": "tiPzFCzeF2UvbYlK",
+          "name": "Transcripción (Groq)"
+        }
+      },
+      "notes": "2026-08-21 (D013): era el nodo @n8n/.../openAi, que hardcodea model='whisper-1' — modelo que NO existe en Groq. Se reemplazó por httpRequest directo al endpoint compatible de Groq con model=whisper-large-v3. La credencial openAiApi se usa como predefinedCredentialType (solo aporta el header Authorization: Bearer). La respuesta mantiene la forma {text}, así que 'final_text = transcripción' sigue funcionando igual."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "final_text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -720,
+        40
+      ],
+      "id": "w1-n10-texto-desde-audio",
+      "name": "final_text = transcripción",
+      "notes": "FIX 2026-08-16 (Vision): includeOtherFields=true — sin esto se perdían phone/chat_id/wa_message_id al llegar al nodo de upsert (bug preexistente)."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m2",
+              "name": "final_text",
+              "value": "={{ $json.body_text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -1200,
+        280
+      ],
+      "id": "w1-n11-texto-directo",
+      "name": "final_text = body_text",
+      "notes": "includeOtherFields=true por consistencia con la rama de audio."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with existing as (\n  select conv.id, conv.contact_id, conv.should_respond, conv.status, conv.metadata\n  from public.conversations conv\n  where conv.contact_id = (select id from public.contacts where phone = $1)\n    and conv.status <> 'resolved'\n  order by conv.created_at desc\n  limit 1\n),\nnew_contact as (\n  insert into public.contacts (phone)\n  values ($1)\n  on conflict (phone) do update set updated_at = now()\n  returning id\n),\nnew_conv as (\n  insert into public.conversations (contact_id, status)\n  select nc.id, 'active'\n  from new_contact nc\n  where not exists (select 1 from existing)\n  returning id, contact_id, should_respond, status, metadata\n)\nselect id, contact_id, should_respond, status, metadata, $2::text as final_text from existing\nunion all\nselect id, contact_id, should_respond, status, metadata, $2::text as final_text from new_conv;",
+        "options": {
+          "queryReplacement": "={{ [$('Normalizar payload Evolution API').item.json.phone, $json.final_text] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -480,
+        160
+      ],
+      "id": "w1-n12-upsert-contacto",
+      "name": "Upsert contacto + conversación",
+      "notes": "FIX 2026-08-16 (Vision, D011): reescrito contra el schema REAL (public.contacts.phone unique, public.conversations sin chat_id, status enum active/waiting/resolved/escalated/paused, sin bot_enabled — should_respond es el kill switch). Reutiliza la conversación abierta más reciente (status <> 'resolved') o crea una nueva. 'phone' se lee de 'Normalizar payload Evolution API' (estable en ambas ramas, no de $json que en la rama de audio ya lo perdió al pasar por el nodo de transcripción). 'final_text' se re-selecciona como columna ($2) para que sobreviva al paso por este nodo Postgres, que de otro modo reemplaza $json solo con el resultado de la query. Requiere credencial postgres apuntando a Supabase.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.messages (conversation_id, contact_id, whatsapp_message_id, direction, message_text, message_type, metadata)\nvalues ($1, $2, $3, 'inbound', $4, $5, $6::jsonb)\non conflict (whatsapp_message_id) do nothing\nreturning id;",
+        "options": {
+          "queryReplacement": "={{ [$json.id, $json.contact_id, $('Normalizar payload Evolution API').item.json.wa_message_id, $json.final_text, $('Normalizar payload Evolution API').item.json.msg_type, JSON.stringify({ is_test: $('Normalizar payload Evolution API').item.json.raw_body?.test === true, transcript: $('Normalizar payload Evolution API').item.json.msg_type === 'ptt' ? $json.final_text : null }) ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -240,
+        160
+      ],
+      "id": "w1-n13-insert-mensaje",
+      "name": "Insertar mensaje (dedup real)",
+      "notes": "FIX 2026-08-16 (Vision, D011): whatsapp_message_id (no wa_message_id), message_text (no body), sin columna transcript/is_test propia — van dentro de metadata jsonb. El ON CONFLICT (whatsapp_message_id) DO NOTHING es la deduplicación de verdad (UNIQUE en BD) — segunda capa además de removeDuplicates.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "k1",
+              "leftValue": "={{ $('Upsert contacto + conversación').item.json.should_respond }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            },
+            {
+              "id": "k2",
+              "leftValue": "={{ $('Upsert contacto + conversación').item.json.metadata?.paused_until }}",
+              "rightValue": "={{ $now.toISO() }}",
+              "operator": {
+                "type": "dateTime",
+                "operation": "after"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        160
+      ],
+      "id": "w1-n14-kill-switch",
+      "name": "Kill switch (¿bot pausado?)",
+      "notes": "FIX 2026-08-16 (Vision, D011): should_respond=false reemplaza bot_enabled=false. Una pausa temporal se guarda en conversations.metadata.paused_until (jsonb) en vez de una columna nueva — no se altera la tabla existente. Rama TRUE = Nairobi está atendiendo en persona; el mensaje ya quedó persistido pero NO se dispara W2."
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        240,
+        40
+      ],
+      "id": "w1-n15-bot-pausado",
+      "name": "Bot pausado (fin)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "conversation_id",
+              "value": "={{ $('Upsert contacto + conversación').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "p2",
+              "name": "contact_id",
+              "value": "={{ $('Upsert contacto + conversación').item.json.contact_id }}",
+              "type": "string"
+            },
+            {
+              "id": "p3",
+              "name": "chat_id",
+              "value": "={{ $('Normalizar payload Evolution API').item.json.chat_id }}",
+              "type": "string"
+            },
+            {
+              "id": "p4",
+              "name": "phone",
+              "value": "={{ $('Normalizar payload Evolution API').item.json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "p5",
+              "name": "message_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "p6",
+              "name": "message_text",
+              "value": "={{ $('Upsert contacto + conversación').item.json.final_text }}",
+              "type": "string"
+            },
+            {
+              "id": "p7",
+              "name": "is_test",
+              "value": "={{ $('Normalizar payload Evolution API').item.json.raw_body?.test === true }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        240,
+        200
+      ],
+      "id": "w1-n16b-payload-w2",
+      "name": "Armar payload para W2",
+      "notes": "FIX 2026-08-16 (Vision): arma explícitamente los 7 campos que W2 espera como workflowInputs (conversation_id, contact_id, chat_id, phone, message_id, message_text, is_test), con los nombres reales del schema."
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "nairobiOsW2Cerebro01"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        200
+      ],
+      "id": "w1-n16-llamar-w2",
+      "name": "Disparar W2 Cerebro Nai",
+      "notes": "workflowId vacío deliberadamente — resuelto: apunta a nairobiOsW2Cerebro01 (Nairobi OS · 02 Cerebro Nai)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://evolution-api:8080/chat/getBase64FromMediaMessage/nairobi-os",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: { key: { id: $json.wa_message_id, remoteJid: $json.chat_id, fromMe: $json.from_me } }, convertToMp4: false }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 1500,
+        "onError": "continueErrorOutput"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1330,
+        -50
+      ],
+      "id": "w1-n22-obtener-audio",
+      "name": "Obtener audio (Evolution API)",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SnHjtoJOJ0HG2mCe",
+          "name": "Evolution API saliente"
+        }
+      },
+      "notes": "R011 (RISKS.md) resuelto: Evolution API no manda el audio inline como WaAPI, hay que pedirlo aparte. Confirmado 2026-08-20 contra la instancia real (POST /chat/getBase64FromMediaMessage/nairobi-os) con un audioMessage real -- la respuesta trae { mediaType, fileName, size, mimetype, base64, buffer }, 'base64' es base64 plano (sin prefijo data:), listo para 'Audio a binario'. onError continua sin romper W1 si Evolution API no puede recuperar el audio (ej. media vencida)."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "audiob1",
+              "name": "media_base64",
+              "value": "={{ $json.base64 || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1265,
+        -50
+      ],
+      "id": "w1-n23-media-base64",
+      "name": "media_base64 = respuesta"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "audiofail1",
+              "name": "final_text",
+              "value": "[El cliente envió una nota de voz que no se pudo transcribir]",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -720,
+        240
+      ],
+      "id": "w1-n24-audio-fallido",
+      "name": "final_text = audio no transcrito",
+      "notes": "2026-08-21: recibe la salida de error de 'Obtener audio (Evolution API)' y de 'Transcribir audio'. Sin esto, ambos nodos tenían onError=continueErrorOutput con la salida de error SIN CONECTAR: el mensaje del cliente se perdía en silencio y Nairobi nunca se enteraba de que le habían escrito. Se registra el mensaje con un marcador para que Nai pueda pedirle al cliente que lo escriba."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select\n  -- lista explicita de familiares/conocidos: nunca se procesan\n  exists (select 1 from public.settings s, lateral jsonb_array_elements_text(s.value) t\n          where s.key = 'personal_blocklist' and t = $2) as bloqueado,\n  -- mismas senales que ya usa la compuerta de W2, pero consultadas ANTES del modelo\n  exists (select 1 from public.policies pl where pl.contact_id = $3::uuid) as known_client,\n  coalesce((select (cv.metadata->>'nai_enabled')::boolean\n            from public.conversations cv where cv.id = $1::uuid), false) as already_active,\n  coalesce((select value #>> '{}' from public.settings where key = 'mode'), 'test') = 'production' as prod,\n  exists (select 1 from public.settings s, lateral jsonb_array_elements_text(s.value) t\n          where s.key = 'test_allowlist' and t = $2) as en_allowlist;",
+        "options": {
+          "queryReplacement": "={{ [$('Upsert contacto + conversación').item.json.id, $('Normalizar payload Evolution API').item.json.phone, $('Upsert contacto + conversación').item.json.contact_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2180,
+        -40
+      ],
+      "id": "w1-n21-senales-prefiltro",
+      "name": "Señales del prefiltro",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "notes": "Consulta barata (una query) que replica las señales de la compuerta de W2 ANTES de gastar en el clasificador."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// PREFILTRO DE COSTO (2026-08-27).\n// La compuerta de W2 ya decidía bien a quién responder, pero decidía DESPUÉS de\n// pagar el clasificador Haiku. Medición real de 7 días: 103 mensajes entrantes,\n// 0 respondidos — el 100% del gasto de clasificación terminó en silencio.\n//\n// Este nodo NO cambia a quién le responde Nai. Solo evita pagarle al modelo por\n// mensajes cuyo destino ya es conocido sin leerlos. Ante la duda, deja pasar:\n// un falso positivo cuesta unos centavos, un falso negativo es un cliente perdido.\nconst g = $json;\nconst texto = ($('Upsert contacto + conversación').item.json.final_text || '').toLowerCase();\n\n// Silencio garantizado, sin importar lo que diga el mensaje:\nif (g.bloqueado) {\n  return { json: { ...g, clasificar: false, motivo: 'contacto personal en personal_blocklist' } };\n}\nif (!g.prod && !g.en_allowlist) {\n  return { json: { ...g, clasificar: false, motivo: 'modo test: el número no está en test_allowlist' } };\n}\n\n// Conversación ya abierta o cliente con póliza: siempre vale la pena pensar.\nif (g.already_active) return { json: { ...g, clasificar: true, motivo: 'conversación ya abierta' } };\nif (g.known_client) return { json: { ...g, clasificar: true, motivo: 'cliente con póliza' } };\n\n// Desconocido: solo se paga el clasificador si hay alguna señal léxica de seguros.\n// Deliberadamente amplia — incluye jerga venezolana y errores de escritura comunes.\n// Si esta lista se queda corta, el síntoma es silencio ante un cliente real: al\n// agregar términos, pecar de generoso.\nconst SENALES = [\n  'seguro', 'asegur', 'poliza', 'póliza', 'rcv', 'cobertura', 'prima', 'siniestr',\n  'cotiz', 'presupuest', 'precio', 'cuanto', 'cuánto', 'costo', 'vale', 'tarifa',\n  'choque', 'chocaron', 'chocar', 'accidente', 'grua', 'grúa', 'volco', 'volcó',\n  'robaron', 'robo', 'hurto', 'perdida total', 'pérdida total', 'deducible',\n  'carro', 'moto', 'vehiculo', 'vehículo', 'camioneta', 'caucho', 'parachoque',\n  'salud', 'hospital', 'clinica', 'clínica', 'medic', 'consulta', 'emergencia',\n  'embaraz', 'parto', 'cesarea', 'cesárea', 'funerario', 'funeral', 'sepelio',\n  'vida', 'hogar', 'casa', 'viaje', 'apartament',\n  'pago', 'pagar', 'cuota', 'financ', 'renov', 'vence', 'venci', 'cancelar',\n  'reclamo', 'reclam', 'cita', 'agendar', 'documento', 'cedula', 'cédula',\n  'carnet', 'titulo', 'título', 'placa', 'reposo', 'factura', 'constancia',\n  'nairobi', 'corredora', 'aseguradora', 'mapfre', 'altamira', 'mercantil',\n  'caracas', 'oceanica', 'oceánica', 'hispana', 'atrio', 'constitucion', 'constitución',\n];\nconst hay = SENALES.some((s) => texto.includes(s));\n// Mensajes muy cortos sin señal (\"ok\", \"hola\", un emoji) son el caso típico del\n// conocido que saluda: no se clasifican.\nreturn {\n  json: {\n    ...g,\n    clasificar: hay,\n    motivo: hay\n      ? 'desconocido con señal de seguros: vale clasificar'\n      : 'desconocido sin señal de seguros: silencio sin gastar en el modelo',\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        -40
+      ],
+      "id": "w1-n22-decidir",
+      "name": "¿Vale la pena clasificar?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.clasificar }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2620,
+        -40
+      ],
+      "id": "w1-n23-if-clasificar",
+      "name": "¿Clasificar?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.messages\nset message_text = case\n      when $3::boolean then '[conversación personal — contenido no almacenado]'\n      else message_text\n    end,\n    metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object(\n      'gate', jsonb_build_object('replied', false, 'reason', $2::text, 'prefilter', true),\n      'redacted', $3::boolean)\nwhere id = $1::uuid\nreturning id;",
+        "options": {
+          "queryReplacement": "={{ [$('Insertar mensaje (dedup real)').item.json.id, $json.motivo, $json.bloqueado === true || $json.motivo.includes('sin señal de seguros')] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2840,
+        80
+      ],
+      "id": "w1-n24-registrar-silencio",
+      "name": "Silencio sin gastar (registrar)",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "notes": "Deja el mismo rastro que la compuerta de W2 (metadata.gate) mas prefilter:true. Ademas REDACTA el texto cuando el mensaje es de una conversacion personal: el WhatsApp que alimenta a Nai es un numero personal, y los chats de familia no deben quedar almacenados en la base de negocio de Nairobi, que es a quien se le entrega el panel. Se conserva la fila (para dedup y metricas), no el contenido."
+    }
+  ],
+  "connections": {
+    "Guard (descartar)": {
+      "main": [
+        [
+          {
+            "node": "Descartado (fin)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dedup (across executions)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup (across executions)": {
+      "main": [
+        [
+          {
+            "node": "¿Es nota de voz?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es nota de voz?": {
+      "main": [
+        [
+          {
+            "node": "Obtener audio (Evolution API)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "final_text = body_text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio a binario": {
+      "main": [
+        [
+          {
+            "node": "Transcribir audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribir audio": {
+      "main": [
+        [
+          {
+            "node": "final_text = transcripción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "final_text = audio no transcrito",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "final_text = transcripción": {
+      "main": [
+        [
+          {
+            "node": "Upsert contacto + conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "final_text = body_text": {
+      "main": [
+        [
+          {
+            "node": "Upsert contacto + conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert contacto + conversación": {
+      "main": [
+        [
+          {
+            "node": "Insertar mensaje (dedup real)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar mensaje (dedup real)": {
+      "main": [
+        [
+          {
+            "node": "Kill switch (¿bot pausado?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kill switch (¿bot pausado?)": {
+      "main": [
+        [
+          {
+            "node": "Bot pausado (fin)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Señales del prefiltro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar payload para W2": {
+      "main": [
+        [
+          {
+            "node": "Disparar W2 Cerebro Nai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Evolution API": {
+      "main": [
+        [
+          {
+            "node": "ACK inmediato",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Normalizar payload Evolution API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar payload Evolution API": {
+      "main": [
+        [
+          {
+            "node": "Guard (descartar)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener audio (Evolution API)": {
+      "main": [
+        [
+          {
+            "node": "media_base64 = respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "final_text = audio no transcrito",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "media_base64 = respuesta": {
+      "main": [
+        [
+          {
+            "node": "Audio a binario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "final_text = audio no transcrito": {
+      "main": [
+        [
+          {
+            "node": "Upsert contacto + conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disparar W2 Cerebro Nai": {
+      "main": [
+        []
+      ]
+    },
+    "Señales del prefiltro": {
+      "main": [
+        [
+          {
+            "node": "¿Vale la pena clasificar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Vale la pena clasificar?": {
+      "main": [
+        [
+          {
+            "node": "¿Clasificar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Clasificar?": {
+      "main": [
+        [
+          {
+            "node": "Armar payload para W2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Silencio sin gastar (registrar)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "errorWorkflow": "nairobiOsW9ErrorHd01"
+  },
+  "pinData": {},
+  "tags": [],
+  "id": "nairobiOsW1Ingesta01"
+}

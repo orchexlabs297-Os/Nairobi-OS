@@ -1,0 +1,17 @@
+{
+ "event": "messages.upsert",
+ "instance": "nairobi-os",
+ "data": {
+  "key": {
+   "remoteJid": "584121110001@s.whatsapp.net",
+   "fromMe": false,
+   "id": "3EB0PREF32_PREF_CONOCIDO"
+  },
+  "pushName": "Prueba",
+  "message": {
+   "conversation": "epa primo feliz cumpleaños, que lo pases bien"
+  },
+  "messageType": "conversation",
+  "messageTimestamp": "__NOW__"
+ }
+}

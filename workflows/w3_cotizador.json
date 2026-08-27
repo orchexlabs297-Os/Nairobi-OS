@@ -156,7 +156,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "select i.id as insurer_id, i.code as insurer_code, i.api_enabled, i.api_base_url, i.api_auth_type,\n       coalesce(rr.commission_pct, i.commission_default_pct) as commission_pct,\n       rr.base_premium, rr.coverage_sum, rr.deductible, rr.coverage_items, rt.source\nfrom public.insurers i\nleft join public.rate_tables rt\n       on rt.insurer_id = i.id and rt.is_active\n      and rt.product_id = (select id from public.products where code = $1)\n      and current_date between rt.valid_from and coalesce(rt.valid_to,'9999-12-31')\nleft join lateral (\n  select * from public.rate_rows r\n   where r.rate_table_id = rt.id\n     and (r.criteria->>'age_min' is null or (($2::jsonb->>'edad')::int) >= (r.criteria->>'age_min')::int)\n     and (r.criteria->>'age_max' is null or (($2::jsonb->>'edad')::int) <= (r.criteria->>'age_max')::int)\n     and (r.criteria->>'cc_max'  is null or (($2::jsonb->>'cc')::int)   <= (r.criteria->>'cc_max')::int)\n     and (r.criteria->>'cc_min'  is null or (($2::jsonb->>'cc')::int)   >= (r.criteria->>'cc_min')::int)\n   order by r.priority limit 1\n) rr on true\nwhere i.status = 'active';",
+        "query": "select i.id as insurer_id, i.code as insurer_code, i.api_enabled, i.api_base_url, i.api_auth_type,\n       coalesce(rr.commission_pct, i.commission_default_pct) as commission_pct,\n       rr.base_premium, rr.coverage_sum, rr.deductible, rr.coverage_items, rt.source, rt.currency\nfrom public.insurers i\nleft join public.rate_tables rt\n       on rt.insurer_id = i.id and rt.is_active\n      and rt.product_id = (select id from public.products where code = $1)\n      and current_date between rt.valid_from and coalesce(rt.valid_to,'9999-12-31')\nleft join lateral (\n  select * from public.rate_rows r\n   where r.rate_table_id = rt.id\n     and (r.criteria->>'age_min' is null or (($2::jsonb->>'edad')::int) >= (r.criteria->>'age_min')::int)\n     and (r.criteria->>'age_max' is null or (($2::jsonb->>'edad')::int) <= (r.criteria->>'age_max')::int)\n     and (r.criteria->>'cc_max'  is null or (($2::jsonb->>'cc')::int)   <= (r.criteria->>'cc_max')::int)\n     and (r.criteria->>'cc_min'  is null or (($2::jsonb->>'cc')::int)   >= (r.criteria->>'cc_min')::int)\n     -- Match genérico por criterios no numéricos (uso, peso, etc.): la fila aplica\n     -- solo si TODOS sus criterios coinciden con lo que dijo el cliente. Así la\n     -- tarifa oficial del RCV (Gaceta 6.835), que se define por uso y peso y no por\n     -- edad, se resuelve con la misma consulta y sin casos especiales.\n     and (r.criteria - 'age_min' - 'age_max' - 'cc_min' - 'cc_max') <@ $2::jsonb\n   order by r.priority limit 1\n) rr on true\nwhere i.status = 'active';",
         "options": {
           "queryReplacement": "={{ [$('Validar datos requeridos').item.json.product_code, JSON.stringify($('Validar datos requeridos').item.json.inputs)] }}"
         }
@@ -169,7 +169,7 @@
       ],
       "id": "w3-n07-resolver-tarifas",
       "name": "Resolver tarifas (aseguradoras activas)",
-      "notes": "DINÁMICO por diseño (D007 en DECISIONS.md): where i.status='active', sin número fijo. Genera una fila por aseguradora activa, tenga o no tarifa. El matching de criterios es genérico vía JSONB — funciona para cualquier producto sin tocar esta query.",
+      "notes": "El match generico (criteria <@ inputs) permite tarifas definidas por cualquier criterio, no solo edad/cc.",
       "credentials": {
         "postgres": {
           "id": "ZOSqufG8JPOkyMXX",
@@ -251,7 +251,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const line = $json;\nconst apiOk = line.statusCode && line.statusCode < 400 && line.body?.premium;\nif (apiOk) return { json: { ...line, premium: line.body.premium, source: 'api' } };\n// Fallback controlado: tarifa de tabla si existe, marcada como estimate\nif (line.base_premium != null) return { json: { ...line, premium: line.base_premium, source: 'estimate' } };\nreturn { json: { ...line, premium: null, source: 'unavailable' } };"
+        "jsCode": "// La tarifa oficial del RCV (Gaceta 6.835) está en euros anclados al TCR del BCV:\n// hay que convertirla para poder decirle un precio al cliente. Las tarifas\n// comerciales de otros ramos ya vienen en su moneda y no se tocan.\nfunction tasas() {\n  try {\n    const r = $('Tasa BCV (EUR/USD)').first().json || {};\n    return { eur: Number(r.EUR) || null, usd: Number(r.USD) || null, fecha: r.effective_date || null };\n  } catch (e) {\n    return { eur: null, usd: null, fecha: null };\n  }\n}\nfunction convertir(line, premium) {\n  if (premium == null) return { premium: null, currency: null };\n  if ((line.currency || '').toUpperCase() !== 'EUR') {\n    return { premium, currency: line.currency || null };\n  }\n  const t = tasas();\n  if (!t.eur) {\n    // Sin tasa no se inventa un precio: se devuelve en euros y se marca.\n    return { premium, currency: 'EUR', rate_missing: true };\n  }\n  const ves = premium * t.eur;\n  return {\n    premium: Math.round(ves * 100) / 100,\n    currency: 'VES',\n    premium_eur: premium,\n    premium_usd: t.usd ? Math.round((ves / t.usd) * 100) / 100 : null,\n    rate_eur_ves: t.eur,\n    rate_date: t.fecha,\n  };\n}\n\nconst line = $json;\nconst apiOk = line.statusCode && line.statusCode < 400 && line.body?.premium;\nif (apiOk) return { json: { ...line, premium: line.body.premium, source: 'api' } };\nif (line.base_premium != null) {\n  const c = convertir(line, Number(line.base_premium));\n  return { json: { ...line, ...c, source: 'estimate' } };\n}\nreturn { json: { ...line, premium: null, source: 'unavailable' } };"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -266,7 +266,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const line = $json;\nif (line.base_premium != null) {\n  return { json: { ...line, premium: line.base_premium, source: line.source || 'manual' } };\n}\nreturn { json: { ...line, premium: null, source: 'unavailable' } };"
+        "jsCode": "// La tarifa oficial del RCV (Gaceta 6.835) está en euros anclados al TCR del BCV:\n// hay que convertirla para poder decirle un precio al cliente. Las tarifas\n// comerciales de otros ramos ya vienen en su moneda y no se tocan.\nfunction tasas() {\n  try {\n    const r = $('Tasa BCV (EUR/USD)').first().json || {};\n    return { eur: Number(r.EUR) || null, usd: Number(r.USD) || null, fecha: r.effective_date || null };\n  } catch (e) {\n    return { eur: null, usd: null, fecha: null };\n  }\n}\nfunction convertir(line, premium) {\n  if (premium == null) return { premium: null, currency: null };\n  if ((line.currency || '').toUpperCase() !== 'EUR') {\n    return { premium, currency: line.currency || null };\n  }\n  const t = tasas();\n  if (!t.eur) {\n    // Sin tasa no se inventa un precio: se devuelve en euros y se marca.\n    return { premium, currency: 'EUR', rate_missing: true };\n  }\n  const ves = premium * t.eur;\n  return {\n    premium: Math.round(ves * 100) / 100,\n    currency: 'VES',\n    premium_eur: premium,\n    premium_usd: t.usd ? Math.round((ves / t.usd) * 100) / 100 : null,\n    rate_eur_ves: t.eur,\n    rate_date: t.fecha,\n  };\n}\n\nconst line = $json;\nif (line.base_premium != null) {\n  const c = convertir(line, Number(line.base_premium));\n  return { json: { ...line, ...c, source: line.source || 'manual' } };\n}\nreturn { json: { ...line, premium: null, source: 'unavailable' } };"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -574,6 +574,31 @@
       ],
       "id": "w3-n23-reducir",
       "name": "Reducir a 1 item (quote)"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://bcv.today/api/v1/rate.json",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1180,
+        -260
+      ],
+      "id": "w3-n20-tasa-bcv",
+      "name": "Tasa BCV (EUR/USD)",
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "notes": "La tarifa oficial del RCV se expresa en euros anclados al TCR del BCV, asi que hay que convertir. Fuente publica, sin credenciales. Si falla, la cotizacion sigue en euros y se marca; nunca se inventa una tasa."
     }
   ],
   "connections": {
@@ -632,7 +657,7 @@
       "main": [
         [
           {
-            "node": "Resolver tarifas (aseguradoras activas)",
+            "node": "Tasa BCV (EUR/USD)",
             "type": "main",
             "index": 0
           }
@@ -812,6 +837,17 @@
         [
           {
             "node": "Determinar estado (completed/partial/manual_pending)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tasa BCV (EUR/USD)": {
+      "main": [
+        [
+          {
+            "node": "Resolver tarifas (aseguradoras activas)",
             "type": "main",
             "index": 0
           }

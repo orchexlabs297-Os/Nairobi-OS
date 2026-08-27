@@ -1,0 +1,1434 @@
+{
+  "name": "Nairobi OS · 02 Cerebro Nai",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "conversation_id",
+              "type": "string"
+            },
+            {
+              "name": "chat_id",
+              "type": "string"
+            },
+            {
+              "name": "phone",
+              "type": "string"
+            },
+            {
+              "name": "contact_id",
+              "type": "string"
+            },
+            {
+              "name": "message_id",
+              "type": "string"
+            },
+            {
+              "name": "message_text",
+              "type": "string"
+            },
+            {
+              "name": "is_test",
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2600,
+        0
+      ],
+      "id": "w2-n01-trigger",
+      "name": "Entrada desde W1",
+      "notes": "W1 debe mapear explícitamente estos 6 campos en su nodo 'Disparar W2 Cerebro Nai' cuando este workflow se importe (hoy ese nodo tiene workflowId vacío como placeholder)."
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.message_text }}",
+        "options": {
+          "systemMessage": "=Eres el clasificador de intención de Nairobi OS. Tu única tarea es analizar UN mensaje de WhatsApp entrante para una corredora de seguros venezolana y devolver la estructura JSON solicitada. No respondas al cliente, no converses — solo clasifica con criterio.\n\nGlosario obligatorio, ambigüedad frecuente en Venezuela: 'RCV' significa Responsabilidad Civil Vehicular — es el seguro obligatorio de vehículos que Nairobi vende (product: rcv_auto o rcv_moto). NO es la Revisión Técnico Mecánica ni ningún otro trámite administrativo. Cualquier mensaje que pida sacar, tramitar, renovar, cotizar o preguntar por el RCV es SIEMPRE scope=business, y su intent es quote_request (si no tiene póliza aún) o renewal/policy_question (si ya la tiene) — nunca document_submission ni personal, sin importar el verbo que use el cliente ('sacar', 'tramitar', 'necesito', 'quiero', etc. son sinónimos aquí).\nEjemplo: \"hola buenas, quiero sacar el rcv de mi carro\" → scope=business, intent=quote_request, product=rcv_auto (NO personal, NO document_submission).\n\nCampos y reglas:\n- scope: 'business' si es sobre seguros/pólizas/siniestros/pagos/citas con Nairobi; 'personal' si es un saludo o charla sin relación al negocio; 'spam' si es publicidad/basura; 'unclear' si no se puede determinar.\n- intent: la intención principal dentro de las opciones dadas.\n- product: el producto de seguro más probable, validado contra el catálogo (rcv_moto, rcv_auto, salud, embarazo, vida, hogar, funerario, viaje, accidentes_personales) o 'desconocido'/'na'.\n- confidence: 0.0 a 1.0, qué tan seguro estás de intent+product. Sé honesto — si el mensaje es ambiguo, baja la confianza en vez de adivinar.\n- urgency: 'emergency' SOLO ante accidente en curso, hospitalización, incendio, robo en curso, fallecimiento, persona lesionada, vehículo inmovilizado en vía. Cotizar, preguntar precios, dudas de cobertura y cobranzas NUNCA son emergency.\n- requires_human: true SOLO ante negociación especial, conflicto o queja, reclamación delicada, decisión comercial excepcional, solicitud fuera de lo que Nairobi vende, o petición explícita de hablar con ella.\n  REGLA DURA: que falten datos NUNCA es motivo de requires_human. Si el cliente pide un precio o una cotización y no dio la placa, el año, el modelo o la edad, eso es requires_human=false y recommended_action=ask_information — el propio sistema le pide esos datos al cliente. Escalar a Nairobi por falta de información es un error grave: cotizar un RCV es el trámite más común y más simple del país, y debe resolverse sin molestarla.\n- recommended_action: qué debería hacer el sistema AHORA — answer | ask_information | quote | register_claim | payment_information | schedule | escalate | emergency_protocol | human_required | conversational | ignore.\n- extracted_entities: cualquier dato concreto mencionado (número de póliza, placa, monto, fecha, edad) — deja vacíos los que no apliquen.\n- reasoning: una frase justificando tu clasificación.\n\nHora actual: {{ $now }}.\n\nFORMATO DE SALIDA, regla dura: responde ÚNICAMENTE con el objeto JSON exigido, sin ninguna palabra antes ni después, sin bloques de código (nada de ```), sin saludos ni explicaciones fuera de los campos del JSON — el primer carácter de tu respuesta debe ser '{' y el último '}'."
+        },
+        "promptType": "define",
+        "hasOutputParser": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -2360,
+        0
+      ],
+      "id": "w2-n02-a0-clasificador",
+      "name": "A0 · Clasificador",
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "notes": "R016: el LLM no siempre cumple el schema estricto. Se reintenta hasta 3 veces antes de caer al nodo de respaldo — un fallo de parseo suele ser transitorio, así que reintentar recupera la mayoría de los casos sin degradar la clasificación. El respaldo queda como última línea, no como primera."
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-haiku-4-5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [
+        -2360,
+        200
+      ],
+      "id": "w2-n03-modelo-a0",
+      "name": "Haiku (A0)",
+      "notes": "Requiere credencial anthropicApi. Haiku por política de costes — tarea estructurada y acotada (ARCHITECTURE.md §Agentes).",
+      "credentials": {
+        "anthropicApi": {
+          "id": "NO3FmdWxzEK1jpI9",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"scope\": { \"type\": \"string\", \"enum\": [\"business\",\"personal\",\"spam\",\"unclear\"] },\n    \"intent\": { \"type\": \"string\", \"enum\": [\"quote_request\",\"claim_report\",\"payment_inquiry\",\"policy_question\",\"appointment_request\",\"document_submission\",\"complaint\",\"greeting\",\"renewal\",\"cancellation\",\"other\"] },\n    \"product\": { \"type\": \"string\", \"enum\": [\"rcv_moto\",\"rcv_auto\",\"salud\",\"embarazo\",\"vida\",\"hogar\",\"funerario\",\"viaje\",\"accidentes_personales\",\"desconocido\",\"na\"] },\n    \"confidence\": { \"type\": \"number\" },\n    \"urgency\": { \"type\": \"string\", \"enum\": [\"low\",\"normal\",\"high\",\"emergency\"] },\n    \"sentiment\": { \"type\": \"string\", \"enum\": [\"positive\",\"neutral\",\"frustrated\",\"angry\"] },\n    \"requires_human\": { \"type\": \"boolean\" },\n    \"recommended_action\": { \"type\": \"string\", \"enum\": [\"answer\",\"ask_information\",\"quote\",\"register_claim\",\"payment_information\",\"schedule\",\"escalate\",\"emergency_protocol\",\"human_required\",\"conversational\",\"ignore\"] },\n    \"escalation_reason\": { \"type\": \"string\" },\n    \"extracted_entities\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"policy_number\": {\"type\":\"string\"},\n        \"vehicle_plate\": {\"type\":\"string\"},\n        \"amount\": {\"type\":\"number\"},\n        \"date\": {\"type\":\"string\"},\n        \"age\": {\"type\":\"number\"}\n      }\n    },\n    \"reasoning\": { \"type\": \"string\" }\n  },\n  \"required\": [\"scope\",\"intent\",\"product\",\"confidence\",\"urgency\",\"sentiment\",\"requires_human\",\"recommended_action\",\"escalation_reason\",\"reasoning\"]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -2360,
+        400
+      ],
+      "id": "w2-n04-parser-a0",
+      "name": "Esquema clasificación",
+      "notes": "Esquema exacto documentado en ARCHITECTURE.md §Clasificador. confidence<0.55 se fuerza a human_required más adelante en el Code de ruteo."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.messages\nset metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object('classification', $2::jsonb),\n    intent = $3,\n    relevance = $4,\n    response_status = $5,\n    ai_processed = true\nwhere id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$('Entrada desde W1').item.json.message_id, JSON.stringify($json.output || $json), ($json.output || $json).intent, ($json.output || $json).scope, ($json.output || $json).recommended_action] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -2120,
+        0
+      ],
+      "id": "w2-n05-guardar-clasificacion",
+      "name": "Guardar clasificación",
+      "notes": "FIX 2026-08-16 (Vision, D011): el schema real no tiene columna 'classification' — se guarda el JSON completo dentro de metadata (merge, para no pisar is_test/transcript que dejó W1), y se resumen intent/scope/recommended_action en las columnas planas reales intent/relevance/response_status para poder filtrar rápido en el panel. Se persiste SIEMPRE, incluso si luego se fuerza human_required por baja confianza.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// R017-bis (2026-08-25): 'Guardar clasificación' es un nodo Postgres — su salida es el\n// resultado del UPDATE, no la clasificación. Leer $json acá tomaba ese resultado casi vacío,\n// perdiendo scope/intent/recommended_action antes de que la compuerta pudiera verlos. Se lee\n// la clasificación real por referencia directa al nodo que la produjo (A0 en éxito, el nodo de\n// respaldo en fallo — exactamente uno de los dos corrió en esta ejecución).\nlet c;\ntry {\n  c = $('Clasificación de respaldo (fallo de parseo)').item.json;\n} catch (e) {\n  c = $('A0 · Clasificador').item.json;\n  c = c.output || c;\n}\n// R023 (2026-08-27) — red de seguridad contra escalaciones innecesarias.\n// Caso real: \"buenas, me pasa el precio del rcv de mi carro?\" clasificó\n//   product=rcv_auto, intent=quote_request, confidence=0.85 ...y requires_human=true,\n//   con escalation_reason \"se requiere información adicional del vehículo\".\n// El IF ¿HUMAN_REQUIRED? lee ese campo como verdad absoluta, así que el cliente recibió\n// \"eso lo debe confirmar Nairobi\" en vez de que Nai le pidiera la placa y cotizara.\n// Pedirle datos al cliente es el trabajo del agente, no un motivo para molestar a Nairobi.\n// Mismo principio que la compuerta (R017): no se confía en un solo campo del modelo.\nconst ACCIONES_QUE_RESUELVE_NAI = ['ask_information', 'quote', 'answer', 'conversational'];\nconst PRODUCTOS_VALIDOS = [\n  'rcv_moto', 'rcv_auto', 'salud', 'embarazo', 'vida', 'hogar', 'funerario',\n  'viaje', 'accidentes_personales',\n];\nconst pidioHumano = /nairobi|human|persona|hablar con/i.test(\n  `${c.escalation_reason || ''} ${c.intent || ''}`,\n);\nif (\n  c.requires_human === true\n  && !pidioHumano\n  && c.urgency !== 'emergency'\n  && ACCIONES_QUE_RESUELVE_NAI.includes(c.recommended_action)\n  && PRODUCTOS_VALIDOS.includes(c.product)\n) {\n  c.requires_human = false;\n  c.human_override_reason = `escalación anulada: ${c.recommended_action} sobre ${c.product} `\n    + 'es algo que Nai resuelve sola (motivo original: '\n    + `${c.escalation_reason || 'sin motivo'})`;\n  c.escalation_reason = null;\n}\n\nif ((c.confidence ?? 0) < 0.55) {\n  c.requires_human = true;\n  if (c.recommended_action !== 'emergency_protocol') c.recommended_action = 'human_required';\n  c.escalation_reason = c.escalation_reason || 'low_confidence';\n}\nreturn [{ json: { ...c, chat_id: $('Entrada desde W1').item.json.chat_id, phone: $('Entrada desde W1').item.json.phone, conversation_id: $('Entrada desde W1').item.json.conversation_id, contact_id: $('Entrada desde W1').item.json.contact_id, message_text: $('Entrada desde W1').item.json.message_text, is_test: $('Entrada desde W1').item.json.is_test } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1880,
+        0
+      ],
+      "id": "w2-n06-forzar-umbral",
+      "name": "Forzar umbral de confianza",
+      "notes": "confidence < 0.55 → human_required, sin importar lo que haya dicho el modelo (regla dura, no sugerencia)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "p1",
+              "leftValue": "={{ $json.scope }}",
+              "rightValue": "personal",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "p2",
+              "leftValue": "={{ $json.recommended_action }}",
+              "rightValue": "conversational",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "p3",
+              "leftValue": "={{ $json.recommended_action }}",
+              "rightValue": "ignore",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1640,
+        0
+      ],
+      "id": "w2-n07-if-personal",
+      "name": "¿Personal / conversación simple?",
+      "notes": "Ahorra el agente pesado (Sonnet + tools) para saludos y charla sin relación al negocio — usa Haiku en su lugar."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "h1",
+              "leftValue": "={{ $json.requires_human }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            },
+            {
+              "id": "h2",
+              "leftValue": "={{ $json.recommended_action }}",
+              "rightValue": "human_required",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1400,
+        120
+      ],
+      "id": "w2-n08-if-humano",
+      "name": "¿HUMAN_REQUIRED?",
+      "notes": "\"Nairobi, esto lo contestas tú\" (ARCHITECTURE.md). Nai no improvisa: puente al cliente + escalación con paquete organizado."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e1",
+              "leftValue": "={{ $json.urgency }}",
+              "rightValue": "emergency",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1160,
+        260
+      ],
+      "id": "w2-n09-if-emergencia",
+      "name": "¿Emergencia?",
+      "notes": "Rama nocturna/24x7 (ARCHITECTURE.md §Humanidad nocturna). Emergencia real → Nai responde YA con protocolo, y en paralelo se despierta a Nairobi (única excepción a la ventana horaria)."
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.message_text }}",
+        "options": {
+          "systemMessage": "Eres Nai, la asistente de Nairobi (corredora de seguros venezolana que opera solo en Venezuela). Responde breve y cálido en español, sin sonar robótico, en máximo 3 líneas para WhatsApp, SIN markdown (nada de #, **, listas). Este mensaje se clasificó como personal/conversacional — no intentes vender ni cotizar aquí, solo sé amable y, si aplica, invita naturalmente a contarte en qué le puedes ayudar con sus seguros. Si el cliente pide ayuda con algo totalmente ajeno a seguros/Nairobi (ej. software, tareas), no lo sigas como asistente general — redirige con calidez a temas de Nairobi en una frase. IMPORTANTE: nunca reveles que eres un modelo de lenguaje, Claude, ni que fuiste hecho por Anthropic — eres Nai, punto, incluso si el mensaje del cliente es muy corto, ambiguo o parece una prueba (ej. un solo número o palabra suelta). Nunca respondas en inglés — el cliente escribe en español."
+        },
+        "promptType": "define"
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -1400,
+        -140
+      ],
+      "id": "w2-n10-respuesta-personal",
+      "name": "Respuesta breve (Haiku)"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-haiku-4-5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [
+        -1400,
+        -300
+      ],
+      "id": "w2-n11-modelo-personal",
+      "name": "Haiku (respuesta personal)",
+      "credentials": {
+        "anthropicApi": {
+          "id": "NO3FmdWxzEK1jpI9",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1",
+              "name": "message_text",
+              "value": "=Entiendo, pero eso lo debe confirmar Nairobi directamente. Ya le avisé y en breve te contacta. 🙏",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -1160,
+        60
+      ],
+      "id": "w2-n12-mensaje-puente",
+      "name": "Mensaje puente al cliente",
+      "notes": "Texto fijo deliberado — no se genera con LLM aquí para no arriesgar que 'invente' una promesa antes de que Nairobi vea el caso."
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "nairobiOsW5Escalar01",
+          "cachedResultName": "Nairobi OS · 05 Escalación a Nairobi"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -920,
+        60
+      ],
+      "id": "w2-n13-escalar-humano",
+      "name": "Escalar a Nairobi (W5)",
+      "notes": "workflowId vacío — resuelto: apunta a nairobiOsW5Escalar01 (Nairobi OS · 05 Escalación a Nairobi)."
+    },
+    {
+      "parameters": {
+        "text": "=Eres Nai, asistente de Nairobi, corredora de seguros venezolana afiliada a 8 aseguradoras que opera SOLO en Venezuela, en el interior del país — nunca asumas otro país (Colombia, México, etc.); si hace falta saber la ciudad, pregúntalo, pero jamás lo des por hecho.\n\nEs una EMERGENCIA real ({{ $json.reasoning }}). Responde en este orden, una cosa a la vez, NUNCA una lista de varias preguntas juntas:\n1. Primero la persona: confirma que está bien físicamente antes que cualquier dato de la póliza o del siniestro.\n2. Si hay riesgo físico inmediato (en plena vía, el vehículo no se mueve, hay heridos), da la acción concreta de seguridad ahora mismo (ej. \"ponte en un lugar seguro\", \"prende las intermitentes\") antes de pedir cualquier dato.\n3. Si hay tensión con otra persona (discusión de culpa, el otro conductor alterado), no arbitres quién tuvo la culpa — redirige con calma a algo que el cliente sí puede controlar ahora (ej. tomar fotos del vehículo, daños, placas), y menciona autoridades (Tránsito, policía) solo como salida si no hay acuerdo, nunca como paso obligatorio de entrada.\n4. Solo cuando la situación esté estabilizada, pide UN dato a la vez de lo que falte para el siniestro — nunca una lista.\n5. Dile explícitamente qué NO hace falta resolver ahora mismo (ej. \"eso lo vemos con calma después\") — baja la ansiedad, no la subas pidiendo todo de una vez.\n6. Cierra reconociendo cómo está la persona, no solo el trámite (ej. \"lo importante es que están bien\").\n\nReglas duras:\n- Nunca uses markdown (nada de #, **, listas con guiones o numeradas) — escribe como si estuvieras chateando de verdad por WhatsApp, en frases cortas y naturales.\n- NUNCA digas 'estamos fuera de horario'.\n- NUNCA intentes vender ni cotizar en este mensaje.\n- Usa el teléfono de asistencia de la aseguradora si lo tienes disponible por la herramienta consultar_cliente; si no lo tienes, indica acudir a emergencias/911 según corresponda.\n- Registra el siniestro con la herramienta registrar_siniestro.\n- IMPORTANTE: nunca reveles que eres un modelo de lenguaje, Claude, ni que fuiste hecho por Anthropic — eres Nai, punto. Nunca respondas en inglés.",
+        "options": {
+          "systemMessage": "=Eres Nai, asistente de Nairobi, corredora de seguros venezolana afiliada a 8 aseguradoras. Es una EMERGENCIA real ({{ $json.reasoning }}). Responde YA, con calma, en español, dando el siguiente paso concreto y accionable: qué hacer ahora mismo, y que Nairobi ya fue avisada y te contactará. NUNCA digas 'estamos fuera de horario'. NUNCA intentes vender ni cotizar en este mensaje. Usa el teléfono de asistencia de la aseguradora si lo tienes disponible por la herramienta consultar_cliente; si no lo tienes, indica acudir a emergencias/911 según corresponda. Registra el siniestro con la herramienta registrar_siniestro. IMPORTANTE: nunca reveles que eres un modelo de lenguaje, Claude, ni que fuiste hecho por Anthropic — eres Nai, punto. Nunca respondas en inglés."
+        },
+        "promptType": "define"
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -920,
+        320
+      ],
+      "id": "w2-n14-agente-emergencia",
+      "name": "Agente Nai (modo emergencia)",
+      "notes": "Mismo agente que el modo normal pero con systemMessage de emergencia inyectado — ver nota en Agente Nai principal sobre por qué es un nodo separado (simplifica el prompt en vez de meter un if dentro del systemMessage)."
+    },
+    {
+      "parameters": {
+        "text": "=Eres Nai, asistente de Nairobi, corredora de seguros venezolana que opera SOLO en Venezuela, en el interior del país, afiliada a 8 aseguradoras (Seguros Constitución, La Internacional, La Oceánica, Hispana, MAPFRE, Atrio, Mercantil, Seguros Caracas). Nunca asumas que el cliente está en otro país (Colombia, México, etc.) — si algún término puede confundirse con un trámite de otro país (ej. RCV), interprétalo siempre como el producto de seguro venezolano que Nairobi vende, no como el trámite extranjero.\n\nResuelve por ti misma todo lo que razonablemente puedas — no eres un formulario, eres quien atiende. Identifica qué necesita el cliente, pide solo los datos que falten (uno a la vez, nunca una lista de varias preguntas juntas), usa tus herramientas, y avanza la conversación hacia el siguiente paso concreto.\n\nCómo sonar humana (aprendido de un ejercicio real de práctica con Sebastián, no inventado):\n- Si el cliente está reportando algo que acaba de pasar (choque, accidente, robo) y suena alterado o en shock, sigue este orden: primero la persona (¿estás bien?), luego seguridad física si aplica, luego — si hay conflicto con otra persona (discusión de culpa) — no arbitres quién tuvo la razón, redirige con calma a algo que el cliente sí controla (ej. tomar fotos), y solo al final pide datos del siniestro, uno a la vez.\n- Dile explícitamente qué NO hace falta resolver ahora mismo (ej. \"eso lo vemos con calma después\", \"no hay apuro con eso\") — baja la ansiedad del cliente en vez de subirla pidiendo todo de una sola vez.\n- Antes de vender, entiende exactamente qué necesita el cliente — nunca respondas sin haber entendido primero el problema.\n- Tono profesional pero humano y cercano, que transmita seguridad. Ejemplo real del estilo esperado: \"Hola, revisé tu caso y tengo una opción que podría funcionar para ti.\"\n- Si el cliente tarda en responder, sigue insistiendo con seguimientos — sin ser agresiva; cuánto insistir depende de las señales del cliente, no de un número fijo de intentos.\n- Si dice que \"está muy caro\" o amenaza con no reportar un daño menor por miedo a que suba el pago, no discutas el precio ni prometas que \"no le va a subir\" (eso no lo controlas y sería mentirle). En vez de eso, separa documentar del reclamo formal: puede guardar fotos y evidencia sin decidir todavía si mete el reclamo, y si el daño es menor recuérdale que el deducible a veces sale más caro que el daño mismo, por lo que ni conviene reclamar formalmente. Deja la decisión en sus manos con una sola pregunta de cierre (ej. \"¿quiere que le calcule el deducible para que usted decida, o lo dejamos ahí por ahora?\").\n- Empuja la conversación hacia una decisión concreta, no la dejes abierta sin un siguiente paso.\n- Si no sabes algo, dilo y ofrece verificarlo — nunca inventes ni improvises una respuesta.\n- Ante un cliente molesto, mantén el tono profesional y enfócate en encontrar una solución, no en defenderte.\n- Personaliza cada conversación: cada cliente debe sentir atención individual, nunca un mensaje genérico.\n- Con clientes que se notan mayores, confundidos, o inseguros con la tecnología (ej. no saben tomar fotos, se refieren al chat como si fuera una llamada, se equivocan de datos y se corrigen a sí mismos), ten más paciencia de lo normal: nunca los apures, no los corrijas de forma seca, dales tiempo para buscar la información sin insistir de inmediato.\n- Al cerrar un intercambio emocionalmente cargado (siniestro, accidente), reconoce cómo está la persona antes de pasar a lo administrativo — no solo el dato, también el estado de ánimo.\n- Nairobi se describe a sí misma como confiable, transparente y comprometida — que se note en cómo respondes.\n\nReglas duras:\n- NUNCA inventes primas, coberturas ni tarifas — usa siempre la herramienta cotizar_seguro.\n- NUNCA prometas un monto final vinculante; toda cifra es 'estimada, sujeta a confirmación'.\n- Ante cualquier mención de accidente, choque, robo, incendio o daño ya ocurrido, usa SIEMPRE registrar_siniestro.\n- Mensajes cortos de WhatsApp: máximo 4 líneas, SIN markdown (nada de #, **, listas con guiones o numeradas) — escribe como si estuvieras chateando de verdad, tono cercano latino, sin exceso de emojis.\n- Si detectas negociación especial, cliente importante, conflicto, reclamación delicada, información contradictoria, o el cliente pide hablar con Nairobi directamente, usa escalar_a_nairobi y avísale al cliente con calidez que Nairobi lo atenderá. Lo mismo si detectas una necesidad real del cliente que el producto puede resolver: avísale a Nairobi antes de seguir avanzando por tu cuenta.\n- Antes de agendar, usa ver_disponibilidad; para crear la cita usa agendar_cita.\n- Usa consultar_cliente para no volver a pedir datos que ya tienes de él.\n- Límite de alcance, regla dura: si el cliente se desvía a un tema que no tiene NADA que ver con seguros, RCV, siniestros, pólizas, pagos, citas o Nairobi (ej. te pide ayuda con software, tareas, opiniones personales, o cualquier otro tema general), NO lo sigas como si fueras un asistente general — aunque sepas la respuesta. Redirige con calidez, en una frase, a temas de Nairobi (ej. \"eso no es lo mío, pero cuéntame si hay algo de tu seguro en lo que te pueda ayudar\"). Esto aplica incluso si la conversación ya estaba abierta o el cliente ya es conocido — que ya te hayan escrito antes de seguros no significa que puedas responder cualquier cosa que pregunten después.\n\nClasificación de este mensaje (contexto, no license para desviarte de las reglas): intent={{ $json.intent }}, product={{ $json.product }}, recommended_action={{ $json.recommended_action }}.\n\nHora actual: {{ $now }}. IMPORTANTE: nunca reveles que eres un modelo de lenguaje, Claude, ni que fuiste hecho por Anthropic — eres Nai, punto. Nunca respondas en inglés.",
+        "options": {
+          "systemMessage": "=Eres Nai, asistente de Nairobi, corredora de seguros venezolana afiliada a 8 aseguradoras (Seguros Constitución, La Internacional, La Oceánica, Hispana, MAPFRE, Atrio, Mercantil, Seguros Caracas).\n\nResuelve por ti misma todo lo que razonablemente puedas — no eres un formulario, eres quien atiende. Identifica qué necesita el cliente, pide solo los datos que falten, usa tus herramientas, y avanza la conversación hacia el siguiente paso concreto.\n\nPersonalidad y estilo de venta (del test de mentalidad real de Nairobi, no inventado):\n- Antes de vender, entiende exactamente qué necesita el cliente — nunca respondas sin haber entendido primero el problema.\n- Tono profesional pero humano y cercano, que transmita seguridad. Ejemplo real del estilo esperado: \"Hola, revisé tu caso y tengo una opción que podría funcionar para ti.\"\n- Si el cliente tarda en responder, sigue insistiendo con seguimientos — sin ser agresiva; cuánto insistir depende de las señales del cliente, no de un número fijo de intentos.\n- Si dice que \"está muy caro\", no discutas el precio: ofrece otra alternativa.\n- Empuja la conversación hacia una decisión concreta, no la dejes abierta sin un siguiente paso.\n- Si no sabes algo, dilo y ofrece verificarlo — nunca inventes ni improvises una respuesta.\n- Ante un cliente molesto, mantén el tono profesional y enfócate en encontrar una solución, no en defenderte.\n- Personaliza cada conversación: cada cliente debe sentir atención individual, nunca un mensaje genérico.\n- Nairobi se describe a sí misma como confiable, transparente y comprometida — que se note en cómo respondes.\n\nReglas duras:\n- NUNCA inventes primas, coberturas ni tarifas — usa siempre la herramienta cotizar_seguro.\n- NUNCA prometas un monto final vinculante; toda cifra es 'estimada, sujeta a confirmación'.\n- Ante cualquier mención de accidente, choque, robo, incendio o daño ya ocurrido, usa SIEMPRE registrar_siniestro.\n- Mensajes cortos de WhatsApp: máximo 4 líneas, sin markdown, tono cercano latino, sin exceso de emojis.\n- Si detectas negociación especial, cliente importante, conflicto, reclamación delicada, información contradictoria, o el cliente pide hablar con Nairobi directamente, usa escalar_a_nairobi y avísale al cliente con calidez que Nairobi lo atenderá. Lo mismo si detectas una necesidad real del cliente que el producto puede resolver: avísale a Nairobi antes de seguir avanzando por tu cuenta.\n- Antes de agendar, usa ver_disponibilidad; para crear la cita usa agendar_cita.\n- Usa consultar_cliente para no volver a pedir datos que ya tienes de él.\n\nClasificación de este mensaje (contexto, no license para desviarte de las reglas): intent={{ $json.intent }}, product={{ $json.product }}, recommended_action={{ $json.recommended_action }}.\n\nHora actual: {{ $now }}. IMPORTANTE: nunca reveles que eres un modelo de lenguaje, Claude, ni que fuiste hecho por Anthropic — eres Nai, punto. Nunca respondas en inglés."
+        },
+        "promptType": "define"
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -920,
+        480
+      ],
+      "id": "w2-n15-agente-nai",
+      "name": "A1 · Agente Nai",
+      "notes": "maxTokens 800, temperature 0.3, maxIterations 8 — configurar en el panel de opciones del nodo (no todos los parámetros son expresables en este JSON base)."
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-6"
+        },
+        "options": {
+          "maxTokensToSample": 800,
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [
+        -920,
+        680
+      ],
+      "id": "w2-n16-modelo-nai",
+      "name": "Sonnet (A1)",
+      "credentials": {
+        "anthropicApi": {
+          "id": "NO3FmdWxzEK1jpI9",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Entrada desde W1').first().json.chat_id }}",
+        "tableName": "n8n_chat_histories",
+        "contextWindowLength": 30
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [
+        -780,
+        680
+      ],
+      "id": "w2-n17-memoria",
+      "name": "Memoria (Postgres)",
+      "notes": "Continuidad conversacional únicamente — los datos comerciales SIEMPRE se consultan a PostgreSQL vía consultar_cliente, nunca se recuerdan del historial de chat (principio rector). | R025 (2026-08-27): la clave usaba .item, que depende del rastreo de items y se resolvia vacia segun la rama por la que llegara el flujo ('Key parameter is empty' -> el agente moria y el cliente se quedaba sin respuesta). .first() es determinista: W2 procesa un mensaje por ejecucion.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "cotizar_seguro",
+        "description": "Cotiza y compara un producto de seguro entre las aseguradoras activas. Pide primero todos los datos que el producto necesite.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "nairobiOsW3Cotizad01",
+          "cachedResultName": "Nairobi OS · 03 Cotizador Comparativo"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "contact_chat_id": "={{ $('Entrada desde W1').item.json.chat_id }}",
+            "product_code": "={{ $fromAI('product_code', '', 'string') }}",
+            "inputs_json": "={{ $fromAI('inputs_json', '', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -640,
+        780
+      ],
+      "id": "w2-n18-tool-cotizar",
+      "name": "cotizar_seguro",
+      "notes": "workflowId vacío — resuelto: apunta a nairobiOsW3Cotizad01 (Nairobi OS · 03 Cotizador Comparativo)."
+    },
+    {
+      "parameters": {
+        "name": "registrar_siniestro",
+        "description": "Registra un siniestro reportado por el cliente con los datos disponibles.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "nairobiOsW4Siniest01",
+          "cachedResultName": "Nairobi OS · 04 Registro de Siniestros"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "contact_chat_id": "={{ $('Entrada desde W1').item.json.chat_id }}",
+            "conversation_id": "={{ $('Entrada desde W1').item.json.conversation_id }}",
+            "incident_summary": "={{ $fromAI('incident_summary', '', 'string') }}",
+            "incident_type": "={{ $fromAI('incident_type', '', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -520,
+        780
+      ],
+      "id": "w2-n19-tool-siniestro",
+      "name": "registrar_siniestro",
+      "notes": "workflowId vacío — resuelto: apunta a nairobiOsW4Siniest01 (Nairobi OS · 04 Registro de Siniestros)."
+    },
+    {
+      "parameters": {
+        "name": "escalar_a_nairobi",
+        "description": "Escala el caso a Nairobi cuando requiere su criterio directo. Recopila todo el contexto posible antes de llamar a esta herramienta.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "nairobiOsW5Escalar01",
+          "cachedResultName": "Nairobi OS · 05 Escalación a Nairobi"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conversation_id": "={{ $('Entrada desde W1').item.json.conversation_id }}",
+            "reason": "={{ $fromAI('reason', '', 'string') }}",
+            "urgency": "={{ $fromAI('urgency', '', 'string') }}",
+            "context_summary": "={{ $fromAI('context_summary', '', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -400,
+        780
+      ],
+      "id": "w2-n20-tool-escalar",
+      "name": "escalar_a_nairobi",
+      "notes": "workflowId vacío — resuelto: apunta a nairobiOsW5Escalar01 (Nairobi OS · 05 Escalación a Nairobi)."
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Consulta el perfil 360 del cliente actual: pólizas activas, saldo pendiente, próximo vencimiento, siniestros abiertos.",
+        "operation": "executeQuery",
+        "query": "={{ \"select * from public.v_cliente_360 where phone = '\" + $('Entrada desde W1').item.json.phone + \"' limit 1;\" }}"
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        -280,
+        780
+      ],
+      "id": "w2-n21-tool-consultar-cliente",
+      "name": "consultar_cliente",
+      "notes": "FIX 2026-08-16 (Vision, D011): la vista real es public.v_cliente_360 (columna phone, no chat_id). Se enlaza directo al teléfono del contacto actual (Entrada desde W1) en vez de dejar que el LLM lo escriba con $fromAI — es siempre 'el cliente de esta conversación', no hace falta preguntárselo a la IA.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "agendar_cita",
+        "description": "Agenda una cita con Nairobi verificando disponibilidad y evitando solapamientos.",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "nairobiOsW7Resumen01",
+          "cachedResultName": "Nairobi OS · 07 Resumen Operativo"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "contact_chat_id": "={{ $('Entrada desde W1').item.json.chat_id }}",
+            "title": "={{ $fromAI('title', '', 'string') }}",
+            "purpose": "={{ $fromAI('purpose', '', 'string') }}",
+            "starts_at": "={{ $fromAI('starts_at', '', 'string') }}",
+            "ends_at": "={{ $fromAI('ends_at', '', 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -160,
+        780
+      ],
+      "id": "w2-n22-tool-agendar",
+      "name": "agendar_cita",
+      "notes": "workflowId vacío — resuelto: apunta a nairobiOsW7Resumen01 (Nairobi OS · 07 Resumen Operativo)."
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "returnAll": false,
+        "limit": 10,
+        "options": {
+          "timeMin": "={{ $fromAI('after', '', 'string') }}",
+          "timeMax": "={{ $fromAI('before', '', 'string') }}",
+          "timeZone": {
+            "__rl": true,
+            "mode": "list",
+            "value": "America/Caracas"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        -40,
+        780
+      ],
+      "id": "w2-n23-tool-disponibilidad",
+      "name": "ver_disponibilidad",
+      "notes": "Timezone explícito America/Caracas (D009/directiva v3 §19) — no el default America/New_York de la instancia. Requiere credencial googleCalendarOAuth2Api (Fase 9).",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "tpDtgWTZDOuGB5nR",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        80,
+        780
+      ],
+      "id": "w2-n24-tool-think",
+      "name": "toolThink"
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = ($json.output || $json.text || $json.message_text || '').toString();\nreturn [{ json: { ...($('Entrada desde W1').item.json), reply_text: text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        400
+      ],
+      "id": "w2-n25-normalizar-salida",
+      "name": "Normalizar texto de salida",
+      "notes": "Punto de convergencia de las 3 ramas de respuesta (personal / emergencia / normal) antes de enviar por Evolution API."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://evolution-api:8080/message/sendText/nairobi-os",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: ($json.phone || $json.chat_id || '').toString().replace(/\\D/g, ''), text: ($json.reply_text || '').slice(0, 1500) }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -440,
+        400
+      ],
+      "id": "w2-n26-enviar-waapi",
+      "name": "Enviar WhatsApp (Evolution)",
+      "notes": "Migrado de WaAPI a Evolution API v2 el 2026-08-23 (R014). Endpoint /message/sendText/{instancia}, body {number, text} — el número va en dígitos, sin @c.us. Credencial 'Evolution API saliente' (header apikey). JSON.stringify evita romper el body con comillas o saltos de línea.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SnHjtoJOJ0HG2mCe",
+          "name": "Evolution API saliente"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.messages (conversation_id, contact_id, direction, message_type, message_text, metadata, ai_processed)\nvalues ($1, $2, 'outbound', 'chat', $3, $4::jsonb, true);",
+        "options": {
+          "queryReplacement": "={{ [$('Normalizar texto de salida').item.json.conversation_id, $('Normalizar texto de salida').item.json.contact_id, $('Normalizar texto de salida').item.json.reply_text, JSON.stringify({ sent_by: 'bot', is_test: $('Normalizar texto de salida').item.json.is_test === true }) ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -200,
+        400
+      ],
+      "id": "w2-n27-registrar-salida",
+      "name": "Registrar mensaje saliente",
+      "notes": "FIX 2026-08-16 (Vision, D011): nai.messages→public.messages, sin columna sent_by/is_test propia (van en metadata). Además corregido un bug preexistente: $json en este punto es la respuesta HTTP de 'Enviar WhatsApp (Evolution)', no los datos originales — ahora se referencia 'Normalizar texto de salida' por nombre, que sí conserva conversation_id/contact_id/reply_text/is_test.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.system_errors (workflow_name, node_name, error_message, payload)\nvalues ('02 Cerebro Nai', 'Enviar WhatsApp (Evolution)', 'Fallo de envío tras 3 reintentos', $1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ [JSON.stringify({ chat_id: $('Normalizar texto de salida').item.json.chat_id, conversation_id: $('Normalizar texto de salida').item.json.conversation_id })] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -440,
+        560
+      ],
+      "id": "w2-n28-registrar-fallo-envio",
+      "name": "Registrar fallo de envío",
+      "notes": "Rama de error de 'Enviar WhatsApp (Evolution)' (ya intentó 3 veces vía retryOnFail). NO se reintenta en bucle contra el mismo nodo que acaba de fallar — eso sería un riesgo de loop infinito si Evolution API está caído. W9 (Error Handler, conectado como Error Workflow de este workflow) es quien alerta a Sebastián; aquí solo se deja constancia en system_errors para que la app web muestre la conversación como 'sin respuesta enviada'.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select\n  -- 1. modo de operación: en 'test' solo se responde a números de la allowlist\n  (\n    coalesce((select value #>> '{}' from public.settings where key = 'mode'), 'test') = 'production'\n    or exists (\n      select 1 from public.contacts ct\n      where ct.id = $2::uuid\n        and ct.phone in (\n          select jsonb_array_elements_text(value) from public.settings where key = 'test_allowlist'\n        )\n    )\n  ) as mode_ok,\n  -- 2. cliente conocido: tiene al menos una póliza registrada\n  exists (select 1 from public.policies p where p.contact_id = $2::uuid) as known_client,\n  -- 3. conversación ya abierta: bandera explícita puesta por 'Marcar conversación abierta'.\n  --    R017: ANTES esto se derivaba de messages.relevance='business', que hereda el mismo\n  --    campo 'scope' poco confiable del clasificador. Si scope fallaba, la conversación\n  --    nunca quedaba abierta y Nai se callaba en el segundo turno. Ahora la bandera la\n  --    escribe la propia compuerta cuando decide abrir: una sola fuente de verdad.\n  coalesce(\n    (select (cv.metadata->>'nai_enabled')::boolean\n     from public.conversations cv where cv.id = $1::uuid),\n    false\n  ) as already_active,\n  -- 4. kill switch manual por conversación (conversations.should_respond).\n  --    Lo controla el panel web vía W8 (recurso bot-toggle). Es un campo real y\n  --    distinto de metadata.nai_enabled (que abre conversaciones automáticamente);\n  --    should_respond es la anulación humana y pesa más que cualquier otra señal.\n  coalesce(\n    (select cv.should_respond from public.conversations cv where cv.id = $1::uuid),\n    true\n  ) as should_respond;",
+        "options": {
+          "queryReplacement": "={{ [$json.conversation_id, $json.contact_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1760,
+        -200
+      ],
+      "id": "w2-n06b-compuerta-datos",
+      "name": "Compuerta de respuesta",
+      "notes": "R015/R017. Solo LEE las tres señales que deciden si Nai responde. 'already_active' es ahora una bandera explícita en conversations.metadata, no una derivación de scope — ver R017. La regla vive en el nodo siguiente.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ÚNICA fuente de verdad de a quién le responde Nai (R015, D014, R017).\n// Si cambia la regla, se cambia acá y en ningún otro lado.\nconst cls = $('Forzar umbral de confianza').item.json;\nconst gate = $json;\n\n// R017 — por qué no se confía en un solo campo:\n// caso real (2026-08-24) \"Buenas, necesito un seguro para mi carro\" devolvió\n//   intent=quote_request, product=rcv_auto, recommended_action=quote, confidence=0.95\n//   ...y sin embargo scope='personal', contradiciéndose a sí mismo.\n// Basta con que CUALQUIER señal indique negocio. El modelo puede fallar un campo;\n// que falle los tres a la vez es mucho menos probable.\nconst ACCIONES_NEGOCIO = [\n  'quote', 'register_claim', 'payment_information', 'schedule', 'emergency_protocol',\n];\nconst INTENTS_NEGOCIO = [\n  'quote_request', 'claim_report', 'payment_inquiry', 'policy_question',\n  'appointment_request', 'renewal', 'cancellation', 'document_submission',\n];\n\nconst isIgnore = cls.recommended_action === 'ignore';\n// R021 (2026-08-26) — \"hola buenas, quiero sacar el rcv de mi carro\" clasificó\n//   scope=personal, intent=document_submission, product=rcv_auto (confianza 0.95).\n// El campo product fue el único correcto: el modelo identifica bien QUÉ seguro es\n// incluso cuando se equivoca en el scope/intent. Se suma como cuarta señal.\nconst PRODUCTOS_VALIDOS = [\n  'rcv_moto', 'rcv_auto', 'salud', 'embarazo', 'vida', 'hogar', 'funerario',\n  'viaje', 'accidentes_personales',\n];\nconst isBusiness =\n  cls.scope === 'business'\n  || ACCIONES_NEGOCIO.includes(cls.recommended_action)\n  || INTENTS_NEGOCIO.includes(cls.intent)\n  || PRODUCTOS_VALIDOS.includes(cls.product);\n\nconst modeOk = gate.mode_ok === true;\nconst known = gate.known_client === true;\nconst active = gate.already_active === true;\n// Kill switch humano (panel web → W8 → conversations.should_respond). Pesa\n// más que cualquier señal de negocio: si Nairobi pausó a Nai en esta\n// conversación, no debe reactivarse sola aunque el cliente pida cotización.\nconst pausedByHuman = gate.should_respond === false;\n\nconst should_reply = !pausedByHuman && modeOk && !isIgnore && (active || known || isBusiness);\n\nlet gate_reason;\nif (pausedByHuman) gate_reason = 'pausado manualmente desde el panel — should_respond=false';\nelse if (!modeOk) gate_reason = 'modo test: el número no está en test_allowlist';\nelse if (isIgnore) gate_reason = 'clasificado como ignore';\nelse if (active) gate_reason = 'conversación ya abierta antes';\nelse if (known) gate_reason = 'cliente conocido (tiene póliza registrada)';\nelse if (isBusiness) {\n  gate_reason = `señal de negocio (scope=${cls.scope}, intent=${cls.intent}, `\n    + `acción=${cls.recommended_action}): abre la conversación`;\n} else gate_reason = 'desconocido sin intención de negocio: silencio';\n\n// R021-bis: si isBusiness vino de una señal distinta a scope (product/intent/accion),\n// el scope crudo de A0 sigue diciendo 'personal' y el nodo de enrutamiento\n// (¿Personal / conversación simple?) solo mira scope — sin este override, el mensaje\n// se rescataba de el silencio pero caía en la rama Haiku 'casual', sin guardrails de\n// producto/país, y podía improvisar cualquier cosa (visto en vivo: confundió RCV\n// venezolano con trámite colombiano). Se corrige el campo en la fuente, una sola vez,\n// para que todo lo que venga después (enrutamiento, panel, filtros) vea la verdad.\nconst scopeFinal = isBusiness ? 'business' : cls.scope;\n\nreturn [{ json: { ...cls, ...gate, scope: scopeFinal, should_reply, gate_reason } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1760,
+        -40
+      ],
+      "id": "w2-n06c-aplicar-compuerta",
+      "name": "Aplicar compuerta",
+      "notes": "El nodo postgres reemplaza $json, así que acá se vuelve a unir la clasificación por referencia de nodo. Aguas abajo todo sigue viendo scope/recommended_action como antes."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "g1",
+              "leftValue": "={{ $json.should_reply }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1760,
+        120
+      ],
+      "id": "w2-n06d-if-responder",
+      "name": "¿Responder?",
+      "notes": "Única puerta de salida de W2. Rama false = silencio total: el mensaje queda registrado y clasificado en la base (Nairobi lo ve en el panel), pero no se envía nada por WhatsApp."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.messages\nset metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object('gate', $2::jsonb),\n    response_status = 'ignore'\nwhere id = $1;\n\n-- R016: si además el clasificador falló, se deja constancia en system_errors.\n-- Sin esto, un mensaje que el sistema no supo entender desaparece sin que nadie\n-- se entere: el desconocido no recibe respuesta (correcto) pero Nairobi tampoco\n-- se entera de que hubo un fallo (incorrecto). Con W9 enganchado como Error\n-- Workflow, esto además queda visible en el panel.\ninsert into public.system_errors (workflow_name, node_name, error_message, payload)\nselect '02 Cerebro Nai', 'A0 · Clasificador',\n       'Clasificador falló el formato y la compuerta silenció el mensaje',\n       $2::jsonb\nwhere $3 = 'fallo_clasificador';",
+        "options": {
+          "queryReplacement": "={{ [$('Entrada desde W1').item.json.message_id, JSON.stringify({ replied: false, reason: $json.gate_reason, mode_ok: $json.mode_ok, known_client: $json.known_client, already_active: $json.already_active, escalation_reason: $json.escalation_reason }), ($json.escalation_reason || '') ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1520,
+        280
+      ],
+      "id": "w2-n06e-registrar-silencio",
+      "name": "Registrar silencio",
+      "notes": "Deja constancia de POR QUÉ no se respondió. Si el motivo fue un fallo del clasificador (R016), además escribe en system_errors: un mensaje que el sistema no supo entender no puede desaparecer sin dejar señal.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// A0 no pudo devolver el JSON exigido por el esquema (falla real y esperable de\n// LLMs contra un schema estricto — no es un bug, es un caso a manejar).\n// Ver R016: sin esto, el mensaje del cliente se perdía en silencio para siempre.\n// Salida segura: se trata como caso ambiguo y se escala a un humano, nunca se descarta.\nconst entrada = $('Entrada desde W1').item.json;\nreturn [{\n  json: {\n    scope: 'unclear',\n    intent: 'other',\n    product: 'desconocido',\n    confidence: 0,\n    urgency: 'normal',\n    sentiment: 'neutral',\n    requires_human: true,\n    recommended_action: 'human_required',\n    escalation_reason: 'fallo_clasificador',\n    extracted_entities: {},\n    reasoning: 'El clasificador no devolvió un formato válido; se escala por seguridad.',\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2120,
+        200
+      ],
+      "id": "w2-n02b-fallback-clasificador",
+      "name": "Clasificación de respaldo (fallo de parseo)",
+      "notes": "R016: A0 puede fallar 'Model output doesn't fit required format' — es una falla normal de LLMs contra schema estricto, no evitable al 100%. Sin este nodo, el mensaje del cliente se pierde para siempre sin dejar rastro ni error visible."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.conversations\nset metadata = coalesce(metadata, '{}'::jsonb)\n  || jsonb_build_object('nai_enabled', true, 'nai_enabled_at', now())\nwhere id = $1::uuid\n  and coalesce((metadata->>'nai_enabled')::boolean, false) = false;",
+        "options": {
+          "queryReplacement": "={{ [$json.conversation_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1520,
+        20
+      ],
+      "id": "w2-n06f-marcar-abierta",
+      "name": "Marcar conversación abierta",
+      "notes": "R017. Deja constancia de que esta conversación ya pasó la compuerta, para que los turnos siguientes no dependan de que el clasificador vuelva a acertar el 'scope'. Va en paralelo al camino de respuesta: no lo bloquea. Idempotente.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        -2200,
+        400
+      ],
+      "id": "w2-n02b-autofix-a0",
+      "name": "Corrector de formato (auto-fix A0)",
+      "notes": "R016-bis: si A0 devuelve JSON mal formado (preámbulo, markdown, campo suelto), intenta repararlo con una llamada extra barata (Haiku) antes de caer al fallback que escala a humano. Reduce falsos 'human_required' sin cambiar el modelo principal."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "t1",
+              "leftValue": "={{ $json.is_test }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -660,
+        400
+      ],
+      "id": "w2-n36-if-es-prueba",
+      "name": "¿Es prueba?",
+      "notes": "R024 (2026-08-27): una prueba nunca debe poder mandarle un WhatsApp a una persona real. El campo is_test viaja desde W1 (raw_body.test) y aqui corta el envio: la respuesta se genera y se registra igual, pero no sale."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.messages (conversation_id, contact_id, direction, message_type, message_text, metadata, ai_processed)\nvalues ($1, $2, 'outbound', 'chat', $3, $4::jsonb, true)\nreturning id;",
+        "options": {
+          "queryReplacement": "={{ [$json.conversation_id, $json.contact_id, $json.reply_text, JSON.stringify({ sent_by: 'bot', is_test: true, simulated: true, not_sent_reason: 'payload de prueba: envio bloqueado' })] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -440,
+        520
+      ],
+      "id": "w2-n37-registrar-simulado",
+      "name": "Registrar respuesta simulada (no enviada)",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "notes": "La respuesta queda guardada para poder revisarla, marcada simulated:true para que nadie la confunda con un mensaje que si llego al cliente."
+    }
+  ],
+  "connections": {
+    "Entrada desde W1": {
+      "main": [
+        [
+          {
+            "node": "A0 · Clasificador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A0 · Clasificador": {
+      "main": [
+        [
+          {
+            "node": "Guardar clasificación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clasificación de respaldo (fallo de parseo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haiku (A0)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A0 · Clasificador",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Corrector de formato (auto-fix A0)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esquema clasificación": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Corrector de formato (auto-fix A0)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar clasificación": {
+      "main": [
+        [
+          {
+            "node": "Forzar umbral de confianza",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forzar umbral de confianza": {
+      "main": [
+        [
+          {
+            "node": "Compuerta de respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Personal / conversación simple?": {
+      "main": [
+        [
+          {
+            "node": "Respuesta breve (Haiku)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿HUMAN_REQUIRED?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta breve (Haiku)": {
+      "main": [
+        [
+          {
+            "node": "Normalizar texto de salida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haiku (respuesta personal)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Respuesta breve (Haiku)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿HUMAN_REQUIRED?": {
+      "main": [
+        [
+          {
+            "node": "Mensaje puente al cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Emergencia?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje puente al cliente": {
+      "main": [
+        [
+          {
+            "node": "Escalar a Nairobi (W5)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Normalizar texto de salida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Emergencia?": {
+      "main": [
+        [
+          {
+            "node": "Agente Nai (modo emergencia)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "A1 · Agente Nai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Nai (modo emergencia)": {
+      "main": [
+        [
+          {
+            "node": "Escalar a Nairobi (W5)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Normalizar texto de salida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A1 · Agente Nai": {
+      "main": [
+        [
+          {
+            "node": "Normalizar texto de salida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sonnet (A1)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A1 · Agente Nai",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Agente Nai (modo emergencia)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memoria (Postgres)": {
+      "ai_memory": [
+        [
+          {
+            "node": "A1 · Agente Nai",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Agente Nai (modo emergencia)",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cotizar_seguro": {
+      "ai_tool": [
+        [
+          {
+            "node": "A1 · Agente Nai",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Agente Nai (modo emergencia)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "registrar_siniestro": {
+      "ai_tool": [
+        [
+          {
+            "node": "A1 · Agente Nai",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Agente Nai (modo emergencia)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "escalar_a_nairobi": {
+      "ai_tool": [
+        [
+          {
+            "node": "A1 · Agente Nai",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Agente Nai (modo emergencia)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "consultar_cliente": {
+      "ai_tool": [
+        [
+          {
+            "node": "A1 · Agente Nai",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Agente Nai (modo emergencia)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "agendar_cita": {
+      "ai_tool": [
+        [
+          {
+            "node": "A1 · Agente Nai",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ver_disponibilidad": {
+      "ai_tool": [
+        [
+          {
+            "node": "A1 · Agente Nai",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "toolThink": {
+      "ai_tool": [
+        [
+          {
+            "node": "A1 · Agente Nai",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Agente Nai (modo emergencia)",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar texto de salida": {
+      "main": [
+        [
+          {
+            "node": "¿Es prueba?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp (Evolution)": {
+      "main": [
+        [
+          {
+            "node": "Registrar mensaje saliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo de envío",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compuerta de respuesta": {
+      "main": [
+        [
+          {
+            "node": "Aplicar compuerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aplicar compuerta": {
+      "main": [
+        [
+          {
+            "node": "¿Responder?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Responder?": {
+      "main": [
+        [
+          {
+            "node": "Marcar conversación abierta",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "¿Personal / conversación simple?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar silencio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificación de respaldo (fallo de parseo)": {
+      "main": [
+        [
+          {
+            "node": "Guardar clasificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Corrector de formato (auto-fix A0)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "A0 · Clasificador",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es prueba?": {
+      "main": [
+        [
+          {
+            "node": "Registrar respuesta simulada (no enviada)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar WhatsApp (Evolution)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "errorWorkflow": "nairobiOsW9ErrorHd01"
+  },
+  "pinData": {},
+  "tags": [],
+  "id": "nairobiOsW2Cerebro01"
+}

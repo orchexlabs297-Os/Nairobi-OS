@@ -1,0 +1,17 @@
+{
+ "event": "messages.upsert",
+ "instance": "nairobi-os",
+ "data": {
+  "key": {
+   "remoteJid": "584121110003@s.whatsapp.net",
+   "fromMe": false,
+   "id": "3EB0PREFR023"
+  },
+  "pushName": "Prueba",
+  "message": {
+   "conversation": "buenas, me pasa el precio del rcv de mi carro?"
+  },
+  "messageType": "conversation",
+  "messageTimestamp": "__NOW__"
+ }
+}

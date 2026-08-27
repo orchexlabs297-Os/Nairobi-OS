@@ -1,0 +1,17 @@
+{
+ "event": "messages.upsert",
+ "instance": "nairobi-os",
+ "data": {
+  "key": {
+   "remoteJid": "584121119999@s.whatsapp.net",
+   "fromMe": false,
+   "id": "3EB0REDACT01"
+  },
+  "pushName": "Prueba",
+  "message": {
+   "conversation": "epa tio, feliz cumple, dios te bendiga siempre"
+  },
+  "messageType": "conversation",
+  "messageTimestamp": "__NOW__"
+ }
+}

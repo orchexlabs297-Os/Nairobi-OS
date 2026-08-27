@@ -428,3 +428,46 @@ Nairobi en vez de cotizar. Se encontraron tres bugs encadenados, no uno solo:
 prueba de Sebastián — ver nota de alcance de datos): "Hola quiero un rcv" y "necesito rcv porfa"
 clasifican y cotizan sin escalar; "hola buenas, quiero sacar el rcv de mi carro" ahora responde en
 personaje, corto, sin markdown, mencionando el RCV como seguro — ya no la respuesta colombiana.
+
+### R023 — Nai escalaba a Nairobi por falta de datos, y pagaba el clasificador por mensajes que ya sabía que iba a ignorar — CERRADO 2026-08-27
+
+Dos hallazgos del mismo día, ambos con impacto directo en plata.
+
+**1. Escalación innecesaria (la queja de Sebastián del 26-08, por otra vía).**
+`"buenas, me pasa el precio del rcv de mi carro?"` clasificó bien —
+`product=rcv_auto`, `intent=quote_request`, `confidence=0.85`— pero además marcó
+`requires_human=true` con `escalation_reason: "se requiere información adicional del
+vehículo"`. El nodo `¿HUMAN_REQUIRED?` lee ese campo como verdad absoluta, así que el
+cliente recibió *"eso lo debe confirmar Nairobi, ya le avisé"* en vez de que Nai le pidiera
+la placa y cotizara. **Que falten datos no es motivo para molestar a Nairobi: pedirlos es
+justamente el trabajo del agente.**
+**Corregido en dos capas** (mismo principio que R017: no confiar en un solo campo del modelo):
+- Prompt de A0: regla dura de que la falta de datos nunca es `requires_human`, va
+  `ask_information`.
+- `Forzar umbral de confianza`: red determinista que anula `requires_human` cuando la acción
+  recomendada es algo que Nai resuelve sola (`ask_information`/`quote`/`answer`), hay producto
+  válido, no es emergencia y el cliente no pidió hablar con Nairobi. Deja rastro en
+  `human_override_reason`.
+Verificado en vivo: el mismo mensaje ahora responde *"¿cuál es el año de tu vehículo?"*.
+
+**2. El 100% del gasto de clasificación se estaba yendo en mensajes que terminaban en silencio.**
+Medición real de 7 días: **103 mensajes entrantes, 0 respondidos**. La compuerta (D014) decidía
+bien a quién responder, pero decidía *después* de pagarle a Haiku por leer cada mensaje —
+incluidos los de familiares y conocidos.
+**Corregido:** prefiltro determinista en W1, antes de disparar W2 (`Señales del prefiltro` →
+`¿Vale la pena clasificar?` → `¿Clasificar?`). Con **una sola query** resuelve los casos cuyo
+destino ya se conoce sin leer el mensaje: `settings.personal_blocklist` (familiares y conocidos,
+corte duro), modo test fuera de allowlist, conversación ya abierta y cliente con póliza. Para
+desconocidos usa una lista léxica amplia de términos de seguros (incluye jerga venezolana y
+errores de escritura frecuentes).
+
+**El prefiltro NO cambia a quién le responde Nai** — replica la decisión que la compuerta ya
+tomaba— solo deja de pagar por saberla. Ante la duda deja pasar al modelo: un falso positivo
+cuesta centavos, un falso negativo es un cliente perdido. Si la lista léxica se queda corta el
+síntoma es silencio ante un cliente real, así que al ampliarla hay que pecar de generoso.
+Los silencios baratos quedan marcados con `metadata.gate.prefilter = true` para distinguirlos
+de los que sí costaron una clasificación.
+
+**Pendiente:** `personal_blocklist` está creada pero **vacía** — los números de familiares y
+conocidos los tiene que cargar Sebastián/Nairobi. Mientras esté vacía, esos contactos siguen
+pasando por el filtro léxico (que ya frena los saludos, pero no es lo mismo que la lista).
