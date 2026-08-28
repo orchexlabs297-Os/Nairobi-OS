@@ -1,0 +1,23 @@
+TANDA 3 — Nairobi OS
+Generada el 2026-08-28. Continúa la tanda 2 (subida el 27-08 a las 17:25).
+
+QUÉ CONTIENE
+- platform/.../NairobiOS.jsx  -> ESTE es el que importa para la web de Vercel.
+                                 Trae la tarjeta de "Números privados" en
+                                 Configuración, para que Nairobi administre
+                                 ella misma los números que Nai debe ignorar.
+- workflows/*.json            -> los 9 flujos de n8n, ya importados y activos
+                                 en el servidor. Van al repo como respaldo.
+- tests/payloads/37_*.json    -> caso de prueba nuevo.
+
+CÓMO SUBIRLO
+1. Descomprime este zip.
+2. En GitHub, entra al repositorio Nairobi-OS.
+3. Arrastra el contenido de la carpeta "actualizacion" respetando las rutas
+   (platform/, workflows/, tests/). GitHub pregunta si reemplazas: sí.
+4. Commit. Vercel despliega solo.
+
+CÓMO SABER QUE FUNCIONÓ
+Entra a la web -> Configuración. Debe aparecer una tarjeta nueva llamada
+"Números privados (Nai los ignora)", con un campo para escribir un teléfono
+y un botón Agregar. Si no aparece, el archivo NairobiOS.jsx no se reemplazó.

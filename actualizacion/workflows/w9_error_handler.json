@@ -1,0 +1,214 @@
+{
+  "name": "Nairobi OS · 99 Error Handler",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2400,
+        0
+      ],
+      "id": "w9-n01-error-trigger",
+      "name": "Al fallar cualquier workflow",
+      "notes": "Configurar en Settings → Error Workflow de W1, W2, W3, W4, W5, W6, W7, W8 cuando cada uno se importe. n8n invoca este workflow automáticamente pasando datos del error (workflow, ejecución, nodo, mensaje)."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.system_errors (workflow_name, execution_id, node_name, error_message, payload)\nvalues ($1, $2, $3, $4, $5::jsonb)\nreturning id;",
+        "options": {
+          "queryReplacement": "={{ [$json.workflow?.name, $json.execution?.id, $json.execution?.lastNodeExecuted, $json.execution?.error?.message || 'sin mensaje', JSON.stringify($json.execution?.error || {}).slice(0, 8000)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -2160,
+        0
+      ],
+      "id": "w9-n02-registrar-error",
+      "name": "Registrar en system_errors",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "u1",
+              "leftValue": "={{ $json.workflow?.name }}",
+              "rightValue": "01 Ingesta WhatsApp|02 Cerebro Nai|04 Registro de Siniestros|05 Escalación",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1920,
+        0
+      ],
+      "id": "w9-n03-if-urgente",
+      "name": "¿Workflow de cara al cliente?",
+      "notes": "Los errores en los workflows que tocan directamente al cliente (ingesta, cerebro, siniestros, escalación) son de alta prioridad — el cliente puede estar esperando respuesta. Errores en cron/reportes son de prioridad normal (se leen en system_errors, no despiertan a nadie)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://evolution-api:8080/message/sendText/nairobi-os",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: ($json.alert_phone || '').toString().replace(/\\D/g, ''), text: '⚠️ Nairobi OS — error en ' + ($('Al fallar cualquier workflow').item.json.workflow?.name || 'workflow desconocido') + ': ' + ($('Al fallar cualquier workflow').item.json.execution?.error?.message || 'sin detalle').toString().slice(0, 300) }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1680,
+        -120
+      ],
+      "id": "w9-n04-alertar-sebastian",
+      "name": "Alertar a Sebastián (Evolution)",
+      "notes": "Migrado de WaAPI a Evolution API v2 el 2026-08-23 (R014). Endpoint /message/sendText/{instancia}, body {number, text} — el número va en dígitos, sin @c.us. Credencial 'Evolution API saliente' (header apikey). JSON.stringify evita romper el body con comillas o saltos de línea.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SnHjtoJOJ0HG2mCe",
+          "name": "Evolution API saliente"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1680,
+        120
+      ],
+      "id": "w9-n05-solo-registrar",
+      "name": "Solo registrado (fin)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select value #>> '{}' as alert_phone\nfrom public.settings where key = 'emergency_contact_phone';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1800,
+        -120
+      ],
+      "id": "w9-n03b-obtener-numero-alerta",
+      "name": "Obtener número de alerta",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "notes": "Reemplaza $vars.SEBASTIAN_ALERT_CHAT_ID (variable inexistente). Mismo origen que W5/W7: public.settings.emergency_contact_phone.",
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Al fallar cualquier workflow": {
+      "main": [
+        [
+          {
+            "node": "Registrar en system_errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar en system_errors": {
+      "main": [
+        [
+          {
+            "node": "¿Workflow de cara al cliente?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Workflow de cara al cliente?": {
+      "main": [
+        [
+          {
+            "node": "Obtener número de alerta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Solo registrado (fin)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener número de alerta": {
+      "main": [
+        [
+          {
+            "node": "Alertar a Sebastián (Evolution)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timezone": "America/Caracas"
+  },
+  "pinData": {},
+  "tags": [],
+  "id": "nairobiOsW9ErrorHd01"
+}

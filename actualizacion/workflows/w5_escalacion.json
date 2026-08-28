@@ -1,0 +1,428 @@
+{
+  "name": "Nairobi OS · 05 Escalación a Nairobi",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "conversation_id",
+              "type": "string"
+            },
+            {
+              "name": "reason",
+              "type": "string"
+            },
+            {
+              "name": "urgency",
+              "type": "string"
+            },
+            {
+              "name": "context_summary",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2400,
+        0
+      ],
+      "id": "w5-n01-trigger",
+      "name": "Entrada (tool: escalar_a_nairobi)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select c.id as contact_id, c.phone, c.name, c.customer_status,\n       cv.id as conversation_id,\n       (select count(*) from public.policies p where p.contact_id = c.id and p.status='active') as active_policies,\n       (select policy_number from public.policies p where p.contact_id = c.id and p.status='active' order by p.created_at desc limit 1) as last_policy_number,\n       (select i.name from public.policies p join public.insurers i on i.id = p.insurer_id where p.contact_id = c.id and p.status='active' order by p.created_at desc limit 1) as last_insurer_name,\n       (select coalesce(sum(pm.amount),0) from public.payments pm join public.policies p on p.id=pm.policy_id where p.contact_id=c.id and pm.status in ('pending','overdue')) as balance_due,\n       (select id from public.claims where contact_id = c.id and status not in ('closed','rejected') order by reported_at desc limit 1) as open_claim_id\nfrom public.conversations cv\njoin public.contacts c on c.id = cv.contact_id\nwhere cv.id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$json.conversation_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -2160,
+        0
+      ],
+      "id": "w5-n02-obtener-contexto",
+      "name": "Obtener contexto del cliente",
+      "notes": "Recopila lo que ya se sabe ANTES de escalar — Nairobi no debe empezar de cero (ARCHITECTURE.md §HUMAN_REQUIRED).",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select message_text as body, direction, created_at from public.messages where conversation_id = $1 order by created_at desc limit 10;",
+        "options": {
+          "queryReplacement": "={{ [$json.conversation_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        0
+      ],
+      "id": "w5-n03-ultimos-mensajes",
+      "name": "Últimos 10 mensajes",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Obtener contexto del cliente').first().json;\nconst input = $('Entrada (tool: escalar_a_nairobi)').first().json;\nconst msgs = $input.all().map(i => i.json).reverse();\n\nconst summary = `ESCALACIÓN · urgencia ${input.urgency.toUpperCase()}\\n` +\n  `Cliente: ${ctx.name || 'sin nombre registrado'} · ${ctx.phone} (${ctx.customer_status || 'sin estado'})\\n` +\n  `Motivo: ${input.reason}\\n` +\n  (ctx.last_policy_number ? `Póliza: ${ctx.last_policy_number} — ${ctx.last_insurer_name}\\n` : 'Sin póliza activa registrada\\n') +\n  (ctx.balance_due > 0 ? `Saldo pendiente: ${ctx.balance_due}\\n` : '') +\n  (ctx.open_claim_id ? `Tiene un siniestro abierto (id ${ctx.open_claim_id})\\n` : '') +\n  `Contexto: ${input.context_summary || 'sin detalle adicional'}\\n` +\n  `Últimos mensajes:\\n` + msgs.map(m => `  [${m.direction}] ${m.body || ''}`).join('\\n');\n\nreturn [{ json: { ...ctx, ...input, summary } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1680,
+        0
+      ],
+      "id": "w5-n04-armar-resumen",
+      "name": "Armar paquete de escalación",
+      "notes": "Formato exacto del paquete ESCALACIÓN documentado en ARCHITECTURE.md §HUMAN_REQUIRED — Nairobi recibe algo ya organizado, no un problema en blanco. FIX 2026-08-16 (Vision, D011): ctx.full_name→ctx.name, ctx.chat_id→ctx.phone, ctx.lifecycle→ctx.customer_status (columnas reales de public.contacts)."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.escalations (conversation_id, contact_id, reason, urgency, context, summary)\nvalues ($1, $2, $3, $4, $5::jsonb, $6)\nreturning id;",
+        "options": {
+          "queryReplacement": "={{ [$json.conversation_id, $json.contact_id, $json.reason, $json.urgency, JSON.stringify({ last_policy_number: $json.last_policy_number, last_insurer_name: $json.last_insurer_name, balance_due: $json.balance_due, open_claim_id: $json.open_claim_id, context_summary: $json.context_summary }), $json.summary] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1440,
+        0
+      ],
+      "id": "w5-n05-insertar-escalacion",
+      "name": "Insertar escalación",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.conversations set should_respond = false, status = 'escalated' where id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$('Armar paquete de escalación').item.json.conversation_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1200,
+        0
+      ],
+      "id": "w5-n06-pausar-bot",
+      "name": "Kill switch: should_respond = false",
+      "notes": "FIX 2026-08-16 (Vision, D011): bot_enabled (no existe) → should_respond=false + status='escalated' (columnas/enum reales de public.conversations). Se reactiva solo cuando Nairobi resuelve la escalación desde la app web (W8 → escalation-resolve). Evita que Nai siga interviniendo mientras Nairobi atiende el caso en persona.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select ($2 = 'emergency') or (\n  extract(hour from now() at time zone coalesce((select value #>> '{}' from public.settings where key='timezone'),'America/Caracas'))\n  between (select (value #>> '{}')::int from public.settings where key='business_hours_start')\n      and (select (value #>> '{}')::int from public.settings where key='business_hours_end')\n) as notify_now,\n(select value #>> '{}' from public.settings where key='emergency_contact_phone') as nairobi_chat_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.conversation_id, $json.urgency] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -960,
+        160
+      ],
+      "id": "w5-n08-evaluar-horario",
+      "name": "Evaluar horario real",
+      "notes": "Reemplaza la condición simplificada del IF anterior con la lógica real (emergency O dentro de horario). 'Noche + no emergencia' → notify_now=false → queda en la cola para el digest de las 08:00 (W7), tal como especifica ARCHITECTURE.md §Humanidad nocturna.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "n1",
+              "leftValue": "={{ $json.notify_now }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -720,
+        160
+      ],
+      "id": "w5-n09-if-notify-now",
+      "name": "¿notify_now?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://evolution-api:8080/message/sendText/nairobi-os",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: ($json.nairobi_chat_id || '').toString().replace(/\\D/g, ''), text: $('Armar paquete de escalación').item.json.summary }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -480,
+        80
+      ],
+      "id": "w5-n10-notificar-nairobi",
+      "name": "Notificar a Nairobi (Evolution)",
+      "notes": "Migrado de WaAPI a Evolution API v2 el 2026-08-23 (R014). Endpoint /message/sendText/{instancia}, body {number, text} — el número va en dígitos, sin @c.us. Credencial 'Evolution API saliente' (header apikey). JSON.stringify evita romper el body con comillas o saltos de línea.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SnHjtoJOJ0HG2mCe",
+          "name": "Evolution API saliente"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.escalations set notified_at = now() where id = (select id from public.escalations order by created_at desc limit 1);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -240,
+        80
+      ],
+      "id": "w5-n11-marcar-notificada",
+      "name": "Marcar notified_at",
+      "notes": "Simplificado con 'order by created_at desc limit 1' porque n8n no encadena bien el id entre ramas paralelas aquí; al formalizar en la UI real de n8n, preferir pasar explícitamente el id devuelto por 'Insertar escalación' vía referencia de nodo en vez de este subquery.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "out1",
+              "name": "escalated",
+              "value": "=true",
+              "type": "boolean"
+            },
+            {
+              "id": "out2",
+              "name": "bridge_message",
+              "value": "=Ya avisé a Nairobi, en breve te confirma directamente. Gracias por tu paciencia.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        0,
+        0
+      ],
+      "id": "w5-n12-salida",
+      "name": "Salida (a Nai)"
+    }
+  ],
+  "connections": {
+    "Entrada (tool: escalar_a_nairobi)": {
+      "main": [
+        [
+          {
+            "node": "Obtener contexto del cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener contexto del cliente": {
+      "main": [
+        [
+          {
+            "node": "Últimos 10 mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Últimos 10 mensajes": {
+      "main": [
+        [
+          {
+            "node": "Armar paquete de escalación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar paquete de escalación": {
+      "main": [
+        [
+          {
+            "node": "Insertar escalación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar escalación": {
+      "main": [
+        [
+          {
+            "node": "Kill switch: should_respond = false",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kill switch: should_respond = false": {
+      "main": [
+        [
+          {
+            "node": "Evaluar horario real",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar horario real": {
+      "main": [
+        [
+          {
+            "node": "¿notify_now?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿notify_now?": {
+      "main": [
+        [
+          {
+            "node": "Notificar a Nairobi (Evolution)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Salida (a Nai)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar notified_at": {
+      "main": [
+        [
+          {
+            "node": "Salida (a Nai)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notificar a Nairobi (Evolution)": {
+      "main": [
+        [
+          {
+            "node": "Marcar notified_at",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "errorWorkflow": "nairobiOsW9ErrorHd01",
+    "timezone": "America/Caracas"
+  },
+  "pinData": {},
+  "tags": [],
+  "id": "nairobiOsW5Escalar01"
+}

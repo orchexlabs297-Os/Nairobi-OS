@@ -1,0 +1,321 @@
+{
+  "name": "Nairobi OS · 04 Registro de Siniestros",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "contact_chat_id",
+              "type": "string"
+            },
+            {
+              "name": "conversation_id",
+              "type": "string"
+            },
+            {
+              "name": "incident_summary",
+              "type": "string"
+            },
+            {
+              "name": "incident_type",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2400,
+        0
+      ],
+      "id": "w4-n01-trigger",
+      "name": "Entrada (tool: registrar_siniestro)"
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.incident_summary }}",
+        "options": {
+          "systemMessage": "Extrae del texto del cliente los datos de un siniestro de seguro. Si un dato no está, deja el campo vacío/null — NO inventes. severity: 'unknown' si no hay indicio, 'minor' si es un roce/daño leve sin heridos, 'moderate' si hay daño significativo sin heridos graves, 'severe' si hay heridos, 'fatal' si se menciona fallecimiento."
+        },
+        "hasOutputParser": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        -2160,
+        0
+      ],
+      "id": "w4-n02-extractor",
+      "name": "Extraer datos del siniestro",
+      "notes": "Haiku (ARCHITECTURE.md §Agentes) — extracción estructurada, no conversación."
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-haiku-4-5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [
+        -2160,
+        200
+      ],
+      "id": "w4-n03-modelo",
+      "name": "Haiku (extractor)",
+      "credentials": {
+        "anthropicApi": {
+          "id": "NO3FmdWxzEK1jpI9",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"policy_number\": {\"type\":\"string\"},\n    \"vehicle_plate\": {\"type\":\"string\"},\n    \"location\": {\"type\":\"string\"},\n    \"incident_at\": {\"type\":\"string\"},\n    \"severity\": {\"type\":\"string\", \"enum\": [\"unknown\",\"minor\",\"moderate\",\"severe\",\"fatal\"]},\n    \"injured\": {\"type\":\"boolean\"},\n    \"description\": {\"type\":\"string\"}\n  }\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -2160,
+        400
+      ],
+      "id": "w4-n04-parser",
+      "name": "Esquema siniestro"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select p.id as policy_id, p.insurer_id, i.name as insurer_name, i.claims_phone\nfrom public.contacts c\njoin public.policies p on p.contact_id = c.id and p.status = 'active'\njoin public.insurers i on i.id = p.insurer_id\nwhere c.phone = regexp_replace($1, '\\D', '', 'g')\n  and (($2 <> '' and p.policy_number = $2) or $2 = '')\norder by p.created_at desc limit 1;",
+        "options": {
+          "queryReplacement": "={{ [$('Entrada (tool: registrar_siniestro)').item.json.contact_chat_id, $json.output?.policy_number || ''] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        0
+      ],
+      "id": "w4-n05-buscar-poliza",
+      "name": "Buscar póliza asociada",
+      "notes": "Si no hay policy_number o no matchea, cae al fallback: la póliza activa más reciente del contacto. Si no hay ninguna póliza activa, el resultado queda vacío y el siniestro se registra igual con policy_id null (INFORMACIÓN INEXISTENTE → candidato a HUMAN_REQUIRED más abajo).",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const incidentType = ($('Entrada (tool: registrar_siniestro)').item.json.incident_type || '').toLowerCase();\nconst checklists = {\n  auto: ['Fotos del vehículo (los 4 ángulos + daño)', 'Cédula de identidad', 'Licencia de conducir', 'Denuncia policial si hubo choque con terceros', 'Certificado médico si hay lesionados'],\n  moto: ['Fotos de la moto (los 4 ángulos + daño)', 'Cédula de identidad', 'Licencia de conducir', 'Denuncia policial si aplica'],\n  salud: ['Informe médico', 'Facturas/recibos originales', 'Cédula de identidad', 'Historia clínica si la solicita la aseguradora'],\n  hogar: ['Fotos del daño', 'Cédula de identidad', 'Denuncia policial si fue robo', 'Presupuesto de reparación si lo tiene'],\n  default: ['Cédula de identidad', 'Fotos o evidencia del incidente', 'Cualquier documento oficial relacionado (denuncia, informe, factura)']\n};\nlet key = 'default';\nif (incidentType.includes('moto')) key = 'moto';\nelse if (incidentType.includes('auto') || incidentType.includes('carro') || incidentType.includes('vehic')) key = 'auto';\nelse if (incidentType.includes('salud') || incidentType.includes('medic') || incidentType.includes('hospital')) key = 'salud';\nelse if (incidentType.includes('hogar') || incidentType.includes('casa') || incidentType.includes('robo')) key = 'hogar';\nreturn [{ json: { checklist: checklists[key] } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1680,
+        0
+      ],
+      "id": "w4-n06-checklist",
+      "name": "Determinar checklist de documentos",
+      "notes": "Determinista por tipo de incidente — no depende del LLM, así el checklist es siempre consistente y auditable."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.claims (policy_id, contact_id, conversation_id, incident_at, incident_type, description, location, severity, required_docs, status)\nselect $2, c.id, $3, nullif($4,'')::timestamptz, $5, $6, $7, $8, $9::jsonb, 'reported'\nfrom public.contacts c where c.phone = regexp_replace($1, '\\D', '', 'g')\nreturning id, severity;",
+        "options": {
+          "queryReplacement": "={{ [$('Entrada (tool: registrar_siniestro)').item.json.contact_chat_id, $('Buscar póliza asociada').item.json.policy_id || null, $('Entrada (tool: registrar_siniestro)').item.json.conversation_id, $('Extraer datos del siniestro').item.json.output?.incident_at || '', $('Entrada (tool: registrar_siniestro)').item.json.incident_type, $('Extraer datos del siniestro').item.json.output?.description || $('Entrada (tool: registrar_siniestro)').item.json.incident_summary, $('Extraer datos del siniestro').item.json.output?.location || '', $('Extraer datos del siniestro').item.json.output?.severity || 'unknown', JSON.stringify($('Determinar checklist de documentos').item.json.checklist)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1440,
+        0
+      ],
+      "id": "w4-n07-insertar-siniestro",
+      "name": "Insertar siniestro",
+      "notes": "policy_id puede quedar null si no se encontró póliza — el siniestro se registra igual (nunca se pierde la señal del cliente).",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "nairobiOsW5Escalar01",
+          "cachedResultName": "Nairobi OS · 05 Escalación a Nairobi"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        -1200,
+        0
+      ],
+      "id": "w4-n08-escalar-siempre",
+      "name": "Escalar a Nairobi (W5) — siempre",
+      "notes": "Un siniestro SIEMPRE dispara escalación (ARCHITECTURE.md/systemMessage de Nai) — resuelto: apunta a nairobiOsW5Escalar01 (Nairobi OS · 05 Escalación a Nairobi)."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "o1",
+              "name": "claim_id",
+              "value": "={{ $('Insertar siniestro').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "o2",
+              "name": "checklist",
+              "value": "={{ $('Determinar checklist de documentos').item.json.checklist }}",
+              "type": "array"
+            },
+            {
+              "id": "o3",
+              "name": "insurer_claims_phone",
+              "value": "={{ $('Buscar póliza asociada').item.json.claims_phone || null }}",
+              "type": "string"
+            },
+            {
+              "id": "o4",
+              "name": "summary_for_agent",
+              "value": "=Siniestro registrado (id {{ $('Insertar siniestro').item.json.id }}). Dile al cliente que ya quedó registrado, que Nairobi fue notificada, y pídele los siguientes documentos cuando pueda: {{ $('Determinar checklist de documentos').item.json.checklist.join(', ') }}.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -960,
+        0
+      ],
+      "id": "w4-n09-salida",
+      "name": "Salida (a Nai)"
+    }
+  ],
+  "connections": {
+    "Entrada (tool: registrar_siniestro)": {
+      "main": [
+        [
+          {
+            "node": "Extraer datos del siniestro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer datos del siniestro": {
+      "main": [
+        [
+          {
+            "node": "Buscar póliza asociada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haiku (extractor)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extraer datos del siniestro",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esquema siniestro": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Extraer datos del siniestro",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar póliza asociada": {
+      "main": [
+        [
+          {
+            "node": "Determinar checklist de documentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determinar checklist de documentos": {
+      "main": [
+        [
+          {
+            "node": "Insertar siniestro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insertar siniestro": {
+      "main": [
+        [
+          {
+            "node": "Escalar a Nairobi (W5) — siempre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalar a Nairobi (W5) — siempre": {
+      "main": [
+        [
+          {
+            "node": "Salida (a Nai)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "errorWorkflow": "nairobiOsW9ErrorHd01",
+    "timezone": "America/Caracas"
+  },
+  "pinData": {},
+  "tags": [],
+  "id": "nairobiOsW4Siniest01"
+}

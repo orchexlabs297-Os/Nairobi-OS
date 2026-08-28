@@ -1,0 +1,448 @@
+{
+  "name": "Nairobi OS · 06 Cobranzas y Vencimientos",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2400,
+        0
+      ],
+      "id": "w6-n01-cron",
+      "name": "Cada 5 minutos",
+      "notes": "Antes corria cada hora: un recordatorio programado para una hora exacta salia en el siguiente tick, hasta 59 min tarde. Cada 5 min da precision razonable y no cuesta nada: todo lo que hace el ciclo es SQL, sin LLM."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.payments set status = 'overdue'\nwhere status = 'pending' and due_date < current_date\nreturning id;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -2160,
+        0
+      ],
+      "id": "w6-n02-marcar-mora",
+      "name": "Marcar mora (pending → overdue)",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.reminders (kind, ref_table, ref_id, window_key, contact_id, scheduled_for)\nselect 'payment_due', 'payments', pm.id, w.key, p.contact_id,\n       (pm.due_date + w.offset_days)::timestamp + time '09:30'\nfrom public.payments pm\njoin public.policies p on p.id = pm.policy_id\njoin (values ('D-7',-7),('D-3',-3),('D-1',-1),('D0',0),('D+3',3),('D+7',7)) as w(key, offset_days) on true\njoin public.contacts c on c.id = p.contact_id\nwhere pm.status in ('pending','overdue')\n  and coalesce((c.metadata->>'do_not_disturb')::boolean, false) = false\n  and (pm.due_date + w.offset_days) between current_date - 1 and current_date + 1\non conflict (kind, ref_id, window_key) do nothing\nreturning id;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        -120
+      ],
+      "id": "w6-n03-planificar-pagos",
+      "name": "Planificar recordatorios de pago",
+      "notes": "Idempotente por el UNIQUE (kind, ref_id, window_key) en public.reminders — correr esta query N veces no crea duplicados (D001/§Cobranzas).",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.reminders (kind, ref_table, ref_id, window_key, contact_id, scheduled_for)\nselect 'policy_renewal', 'policies', pol.id, w.key, pol.contact_id,\n       (pol.end_date + w.offset_days)::timestamp + time '09:30'\nfrom public.policies pol\njoin (values ('D-30',-30),('D-15',-15),('D-5',-5)) as w(key, offset_days) on true\njoin public.contacts c on c.id = pol.contact_id\nwhere pol.status = 'active'\n  and coalesce((c.metadata->>'do_not_disturb')::boolean, false) = false\n  and (pol.end_date + w.offset_days) between current_date - 1 and current_date + 1\non conflict (kind, ref_id, window_key) do nothing\nreturning id;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        120
+      ],
+      "id": "w6-n04-planificar-renovaciones",
+      "name": "Planificar recordatorios de renovación",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        -1680,
+        0
+      ],
+      "id": "w6-n05-merge-plan",
+      "name": "Unir planificación"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select r.id as reminder_id, r.kind, r.window_key, r.contact_id, r.ref_table, r.ref_id,\n       c.phone, c.name\nfrom public.reminders r\njoin public.contacts c on c.id = r.contact_id\nwhere r.status = 'pending'\n  and r.scheduled_for <= now()\n  and extract(hour from now() at time zone coalesce((select value #>> '{}' from public.settings where key='timezone'), 'America/Caracas')) between\n      (select (value #>> '{}')::int from public.settings where key='business_hours_start')\n      and (select (value #>> '{}')::int from public.settings where key='business_hours_end')\n  and (\n    (select value #>> '{}' from public.settings where key='mode') = 'production'\n    or c.phone in (select jsonb_array_elements_text(value) from public.settings where key='test_allowlist')\n  )\norder by r.scheduled_for asc\nlimit 50\nfor update of r skip locked;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1440,
+        0
+      ],
+      "id": "w6-n06-seleccionar-pendientes",
+      "name": "Seleccionar pendientes a enviar",
+      "notes": "Respeta ventana horaria 08-20 (public.settings) y TEST_MODE/allowlist (D009). FOR UPDATE SKIP LOCKED evita que dos ejecuciones concurrentes tomen el mismo recordatorio.",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1200,
+        0
+      ],
+      "id": "w6-n07-lotes",
+      "name": "Lotes de 5"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select r.id as reminder_id, r.kind, r.window_key, r.message_text, c.phone, c.name as full_name,\n       pm.amount, pm.due_date, pm.currency, pol.policy_number, ins.name as insurer_name,\n       pol.end_date\nfrom public.reminders r\njoin public.contacts c on c.id = r.contact_id\nleft join public.payments pm on r.ref_table = 'payments' and pm.id = r.ref_id\nleft join public.policies polp on pm.policy_id = polp.id\nleft join public.policies pol on r.ref_table = 'policies' and pol.id = r.ref_id\nleft join public.insurers ins on ins.id = coalesce(polp.insurer_id, pol.insurer_id)\nwhere r.id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$json.reminder_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -960,
+        -120
+      ],
+      "id": "w6-n08-datos-recordatorio",
+      "name": "Obtener datos del recordatorio",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nlet text;\n// Recordatorio programado a mano (kind='custom'): el texto ya viene escrito y se\n// envia literal. Es lo que permite programar un mensaje para una fecha y hora\n// concretas sin que sea una cobranza.\nif (r.message_text) {\n  return [{ json: { ...r, message_text: r.message_text } }];\n}\nif (r.kind === 'payment_due') {\n  const amountStr = `${r.amount} ${r.currency}`;\n  if (r.window_key.startsWith('D-')) {\n    text = `Hola ${r.full_name || ''}, te recordamos que tienes un pago de ${amountStr} de tu póliza ${r.policy_number || ''} (${r.insurer_name || ''}) con vencimiento el ${r.due_date}. Cualquier duda, aquí estamos.`;\n  } else {\n    text = `Hola ${r.full_name || ''}, tu pago de ${amountStr} de la póliza ${r.policy_number || ''} (${r.insurer_name || ''}) venció el ${r.due_date}. Escríbenos para coordinar el pago y evitar que tu cobertura se vea afectada.`;\n  }\n} else if (r.kind === 'policy_renewal') {\n  text = `Hola ${r.full_name || ''}, tu póliza ${r.policy_number || ''} (${r.insurer_name || ''}) vence el ${r.end_date}. Contáctanos para gestionar tu renovación a tiempo.`;\n} else {\n  text = `Hola ${r.full_name || ''}, tienes un recordatorio pendiente. Contáctanos para más detalles.`;\n}\nreturn [{ json: { ...r, message_text: text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        -120
+      ],
+      "id": "w6-n09-construir-texto",
+      "name": "Construir texto (sin LLM)",
+      "notes": "Determinista desde SQL — nunca un LLM calcula o redacta un monto adeudado (principio rector)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://evolution-api:8080/message/sendText/nairobi-os",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: ($json.phone || '').toString().replace(/\\D/g, ''), text: $json.message_text }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -480,
+        -120
+      ],
+      "id": "w6-n10-enviar-waapi",
+      "name": "Enviar WhatsApp (Evolution)",
+      "notes": "Migrado de WaAPI a Evolution API v2 el 2026-08-23 (R014). Endpoint /message/sendText/{instancia}, body {number, text} — el número va en dígitos, sin @c.us. Credencial 'Evolution API saliente' (header apikey). JSON.stringify evita romper el body con comillas o saltos de línea.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SnHjtoJOJ0HG2mCe",
+          "name": "Evolution API saliente"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.reminders set status = 'sent', sent_at = now() where id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$('Obtener datos del recordatorio').item.json.reminder_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -240,
+        -200
+      ],
+      "id": "w6-n11-marcar-enviado",
+      "name": "Marcar enviado",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update public.reminders set status = 'failed', error = $2 where id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$('Obtener datos del recordatorio').item.json.reminder_id, $json.error || 'error desconocido al enviar'] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -240,
+        -40
+      ],
+      "id": "w6-n12-marcar-fallido",
+      "name": "Marcar fallido",
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        -120
+      ],
+      "id": "w6-n13-espera",
+      "name": "Esperar 3s (anti rate-limit)"
+    }
+  ],
+  "connections": {
+    "Marcar mora (pending → overdue)": {
+      "main": [
+        [
+          {
+            "node": "Planificar recordatorios de pago",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Planificar recordatorios de renovación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planificar recordatorios de pago": {
+      "main": [
+        [
+          {
+            "node": "Unir planificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planificar recordatorios de renovación": {
+      "main": [
+        [
+          {
+            "node": "Unir planificación",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Unir planificación": {
+      "main": [
+        [
+          {
+            "node": "Seleccionar pendientes a enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seleccionar pendientes a enviar": {
+      "main": [
+        [
+          {
+            "node": "Lotes de 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lotes de 5": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Obtener datos del recordatorio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener datos del recordatorio": {
+      "main": [
+        [
+          {
+            "node": "Construir texto (sin LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir texto (sin LLM)": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp (Evolution)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar enviado": {
+      "main": [
+        [
+          {
+            "node": "Esperar 3s (anti rate-limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar fallido": {
+      "main": [
+        [
+          {
+            "node": "Esperar 3s (anti rate-limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar 3s (anti rate-limit)": {
+      "main": [
+        [
+          {
+            "node": "Lotes de 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp (Evolution)": {
+      "main": [
+        [
+          {
+            "node": "Marcar enviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar fallido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cada 5 minutos": {
+      "main": [
+        [
+          {
+            "node": "Marcar mora (pending → overdue)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "errorWorkflow": "nairobiOsW9ErrorHd01",
+    "timezone": "America/Caracas"
+  },
+  "pinData": {},
+  "tags": [],
+  "id": "nairobiOsW6Cobranz01"
+}
