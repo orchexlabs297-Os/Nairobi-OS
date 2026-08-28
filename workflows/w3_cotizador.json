@@ -431,8 +431,14 @@
       "parameters": {
         "promptType": "define",
         "text": "=Producto: {{ $('Validar datos requeridos').item.json.product_code }}\nDatos del cliente: {{ JSON.stringify($('Validar datos requeridos').item.json.inputs) }}\nLíneas de cotización (ya calculadas, no las recalcules): {{ JSON.stringify($input.all().map(i => i.json)) }}\n\nRedacta una recomendación breve para WhatsApp (máx 4 líneas), en español, mencionando la mejor opción por relación cobertura/precio. Si faltan aseguradoras por confirmar, dilo. NUNCA inventes cifras distintas a las que te di.",
-        "options": {
-          "systemMessage": "Eres un analista de cotizaciones de seguros. Solo redactas y comparas texto a partir de números ya calculados — nunca calculas ni inventas primas. Sé breve y claro para WhatsApp."
+        "options": {},
+        "messages": {
+          "messageValues": [
+            {
+              "type": "SystemMessagePromptTemplate",
+              "message": "Eres un analista de cotizaciones de seguros. Solo redactas y comparas texto a partir de números ya calculados — nunca calculas ni inventas primas. Sé breve y claro para WhatsApp."
+            }
+          ]
         }
       },
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
@@ -442,7 +448,8 @@
         200
       ],
       "id": "w3-n18-a2-analista",
-      "name": "A2 · Analista de Cotización"
+      "name": "A2 · Analista de Cotización",
+      "notes": "Las instrucciones van en messages.messageValues: este nodo es un Basic LLM Chain y NO soporta options.systemMessage — n8n lo acepta y lo ignora en silencio. No lo muevas de vuelta a options."
     },
     {
       "parameters": {
@@ -859,7 +866,8 @@
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": false,
-    "errorWorkflow": "nairobiOsW9ErrorHd01"
+    "errorWorkflow": "nairobiOsW9ErrorHd01",
+    "timezone": "America/Caracas"
   },
   "pinData": {},
   "tags": [],

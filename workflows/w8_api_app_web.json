@@ -918,6 +918,140 @@
       "id": "w8-n39-responder-insurer",
       "name": "Responder insurer-status",
       "notes": "El update devuelve 0 filas si el insurer_id no existe. Con alwaysOutputData el item llega vacío: se traduce a error legible en vez de un 200 mudo."
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nairobi-os-4d8e1f-api/blocklist",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2400,
+        900
+      ],
+      "id": "w8-n40-webhook-blocklist",
+      "name": "Webhook blocklist",
+      "webhookId": "4d8e1f-nairobi-os-w8-blocklist",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nairobiApiAppWeb01",
+          "name": "API App Web"
+        }
+      },
+      "notes": "Nairobi administra ella misma los numeros de familiares y conocidos que Nai debe ignorar. W1 los consulta en el prefiltro, ANTES de llamar al modelo, asi que un numero aqui no cuesta ni un token."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Nairobi escribe el numero como lo tiene en la agenda: 0412-424.8369, +58 412 4248369,\n// 4124248369. W1 compara contra el JID de WhatsApp, que siempre es 584124248369 (solo\n// digitos, con codigo de pais). Si no se normaliza aca, la bloqueada nunca coincide y el\n// filtro parece roto sin dar ningun error.\nconst body = $json.body || {};\nconst accion = (body.action || 'add').toLowerCase();\n\nfunction rechazar(motivo) {\n  return [{ json: { ok: false, motivo } }];\n}\n\nif (!['add', 'remove', 'set'].includes(accion)) {\n  return rechazar(`Accion no valida: \"${accion}\". Use add, remove o set.`);\n}\n\nfunction normalizar(entrada) {\n  const d = String(entrada ?? '').replace(/\\D/g, '');\n  if (!d) return null;\n  if (d.length === 12 && d.startsWith('58')) return d;          // 584124248369\n  if (d.length === 11 && d.startsWith('0')) return '58' + d.slice(1); // 04124248369\n  if (d.length === 10 && d.startsWith('4')) return '58' + d;    // 4124248369\n  return null;\n}\n\nconst crudos = body.numbers ?? body.phones ?? body.phone ?? body.number ?? [];\nconst lista = Array.isArray(crudos) ? crudos : [crudos];\n\nif (accion !== 'set' && lista.length === 0) {\n  return rechazar('Falta el numero. Envie phone o numbers.');\n}\n\nconst validos = [];\nconst invalidos = [];\nfor (const bruto of lista) {\n  const n = normalizar(bruto);\n  if (n) { if (!validos.includes(n)) validos.push(n); }\n  else invalidos.push(String(bruto));\n}\n\nif (validos.length === 0 && accion !== 'set') {\n  return rechazar(\n    `No se reconocio ningun numero valido: ${invalidos.join(', ')}. ` +\n    'Formato esperado: 0412-4248369, +58 412 4248369 o 584124248369.'\n  );\n}\n\nreturn [{ json: { ok: true, accion, numeros: validos, invalidos } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2160,
+        900
+      ],
+      "id": "w8-n41-normalizar-blocklist",
+      "name": "Normalizar numeros (blocklist)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with actual as (\n  select coalesce((select value from public.settings where key = 'personal_blocklist'), '[]'::jsonb) as v\n),\nentrada as (\n  select $1::text as accion, $2::jsonb as nums\n),\ncalculado as (\n  select case (select accion from entrada)\n    when 'set' then (\n      select coalesce(jsonb_agg(distinct x), '[]'::jsonb)\n      from jsonb_array_elements_text((select nums from entrada)) as t(x)\n    )\n    when 'add' then (\n      select coalesce(jsonb_agg(distinct x), '[]'::jsonb) from (\n        select jsonb_array_elements_text((select v from actual)) as x\n        union\n        select jsonb_array_elements_text((select nums from entrada))\n      ) u\n    )\n    when 'remove' then (\n      select coalesce(jsonb_agg(distinct x), '[]'::jsonb) from (\n        select jsonb_array_elements_text((select v from actual)) as x\n      ) u\n      where x not in (select jsonb_array_elements_text((select nums from entrada)))\n    )\n  end as v\n)\ninsert into public.settings (key, value, updated_at)\nselect 'personal_blocklist', calculado.v, now() from calculado\non conflict (key) do update set value = excluded.value, updated_at = now()\nreturning key, value as blocklist, jsonb_array_length(value) as total;",
+        "options": {
+          "queryReplacement": "={{ [$json.accion, JSON.stringify($json.numeros)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1920,
+        900
+      ],
+      "id": "w8-n42-post-blocklist",
+      "name": "Actualizar personal_blocklist",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "ZOSqufG8JPOkyMXX",
+          "name": "Supabase Postgrest"
+        }
+      },
+      "notes": "El insert...select sobre 'calculado' siempre produce exactamente una fila, incluso al vaciar la lista. Es a proposito: una consulta que devuelve 0 filas emite 0 items y mata el flujo en silencio, devolviendo un 200 mudo."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, data: { blocklist: $json.blocklist, total: $json.total, accion: $('Normalizar numeros (blocklist)').first().json.accion, no_reconocidos: $('Normalizar numeros (blocklist)').first().json.invalidos } } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -960,
+        900
+      ],
+      "id": "w8-n43-responder-blocklist",
+      "name": "Responder blocklist",
+      "notes": "Devuelve la lista completa ya normalizada para que el panel pinte el estado real, no el que supone."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bl-ok",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2040,
+        900
+      ],
+      "id": "w8-n44-if-blocklist",
+      "name": "¿Numeros validos?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: $json.motivo } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -960,
+        1060
+      ],
+      "id": "w8-n45-responder-bl-error",
+      "name": "Responder blocklist (dato invalido)",
+      "notes": "Sin esta rama, un numero mal escrito abortaba el workflow y el panel recibia un 200 con cuerpo vacio: parecia que se guardo y no se guardo nada."
     }
   ],
   "connections": {
@@ -1301,13 +1435,65 @@
           }
         ]
       ]
+    },
+    "Webhook blocklist": {
+      "main": [
+        [
+          {
+            "node": "Normalizar numeros (blocklist)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar numeros (blocklist)": {
+      "main": [
+        [
+          {
+            "node": "¿Numeros validos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar personal_blocklist": {
+      "main": [
+        [
+          {
+            "node": "Responder blocklist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Numeros validos?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar personal_blocklist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder blocklist (dato invalido)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": false,
-    "errorWorkflow": "nairobiOsW9ErrorHd01"
+    "errorWorkflow": "nairobiOsW9ErrorHd01",
+    "timezone": "America/Caracas"
   },
   "pinData": {},
   "tags": [],

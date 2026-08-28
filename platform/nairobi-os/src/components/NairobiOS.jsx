@@ -492,8 +492,12 @@ async function callAppWebApi(resource, body) {
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`n8n respondió ${res.status}`);
-  return res.json().catch(() => ({}));
+  const data = await res.json().catch(() => ({}));
+  // W8 responde 400 con { ok:false, error } cuando el dato es inválido (por
+  // ejemplo un teléfono ilegible). Ese texto está escrito para que Nairobi lo
+  // entienda, así que se propaga tal cual en vez de "n8n respondió 400".
+  if (!res.ok) throw new Error(data?.error || `n8n respondió ${res.status}`);
+  return data;
 }
 
 // Traduce el resultado real del clasificador de W2 (metadata.classification)
@@ -2063,6 +2067,113 @@ function SystemStatusCard() {
   );
 }
 
+// Números de familiares y conocidos que Nai debe ignorar por completo. W1 los
+// consulta en el prefiltro, ANTES de llamar al modelo: un número aquí no gasta
+// ni un token, y el texto de esos mensajes se guarda redactado.
+// Lectura directa de Supabase (RLS permite SELECT a authenticated); la
+// escritura pasa por W8, como todo lo demás.
+function NumerosPrivadosCard() {
+  const [numeros, setNumeros] = useState([]);
+  const [nuevo, setNuevo] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [guardando, setGuardando] = useState("");
+  const [err, setErr] = useState("");
+
+  async function cargar() {
+    if (!isSupabaseConfigured) return;
+    setCargando(true);
+    setErr("");
+    try {
+      const { data, error } = await supabase
+        .from("settings").select("value").eq("key", "personal_blocklist").maybeSingle();
+      if (error) throw error;
+      setNumeros(Array.isArray(data?.value) ? data.value : []);
+    } catch (e) {
+      setErr(e.message || "No se pudo leer la lista.");
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  useEffect(() => { cargar(); }, []);
+
+  async function aplicar(action, phone) {
+    setGuardando(phone || "nuevo");
+    setErr("");
+    try {
+      const res = await callAppWebApi("blocklist", { action, phone });
+      // W8 devuelve la lista completa ya normalizada: se pinta el estado real
+      // que quedó guardado, no el que supone el panel.
+      setNumeros(res?.data?.blocklist ?? []);
+      if (action === "add") setNuevo("");
+    } catch (e) {
+      setErr(e.message || "No se pudo guardar.");
+    } finally {
+      setGuardando("");
+    }
+  }
+
+  function formatear(n) {
+    // 584124248369 → 0412 424 8369, que es como Nairobi los tiene en la agenda.
+    const m = /^58(\d{3})(\d{3})(\d{4})$/.exec(n);
+    return m ? `0${m[1]} ${m[2]} ${m[3]}` : n;
+  }
+
+  return (
+    <Card title="Números privados (Nai los ignora)" icon={WifiOff}>
+      <p className="mb-3 text-xs text-slate-500">
+        Familiares y conocidos que escriben por temas personales. Nai no lee ni responde
+        esos chats, y no gasta nada en procesarlos. Escribe el número como lo tienes en
+        la agenda: <code className="rounded bg-slate-100 px-1 py-0.5">0412-4248369</code>.
+      </p>
+
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => { e.preventDefault(); if (nuevo.trim()) aplicar("add", nuevo.trim()); }}
+      >
+        <input
+          value={nuevo}
+          onChange={(e) => setNuevo(e.target.value)}
+          placeholder="0412-4248369"
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
+        />
+        <button
+          type="submit"
+          disabled={!nuevo.trim() || guardando === "nuevo"}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {guardando === "nuevo" ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+          Agregar
+        </button>
+      </form>
+
+      {err && <p className="mt-2 text-[11px] text-red-500">{err}</p>}
+
+      <div className="mt-3 space-y-1.5">
+        {cargando && <p className="text-xs text-slate-400">Cargando…</p>}
+        {!cargando && numeros.length === 0 && (
+          <p className="text-xs text-slate-400">
+            La lista está vacía: Nai evalúa todos los números que le escriben.
+          </p>
+        )}
+        {numeros.map((n) => (
+          <div key={n} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+            <span className="font-mono text-sm text-slate-700">{formatear(n)}</span>
+            <button
+              onClick={() => aplicar("remove", n)}
+              disabled={guardando === n}
+              title="Quitar de la lista"
+              className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+            >
+              {guardando === n ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+            </button>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function ConfiguracionPage() {
   const [n8nUrl, setN8nUrl] = useState(import.meta.env.VITE_N8N_APP_WEB_URL || "");
   const [waapiProvider, setWaapiProvider] = useState("evolution_api");
@@ -2128,6 +2239,8 @@ function ConfiguracionPage() {
               />
             </div>
           </Card>
+
+          <NumerosPrivadosCard />
 
           <Card title="Flujos de Trabajo Personalizados" icon={Bot}>
             <p className="text-xs text-slate-500">Cada módulo de Nairobi OS despacha eventos al webhook de n8n configurado arriba, siguiendo el esquema <code className="rounded bg-slate-100 px-1 py-0.5">nairobi_os_core_schema_v1</code>. Los flujos sugeridos:</p>

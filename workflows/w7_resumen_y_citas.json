@@ -26,7 +26,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "insert into public.daily_metrics (metric_date, new_leads, quotes_created, policies_sold, gross_premium, commissions_accrued, commissions_collected, claims_opened, appointments_scheduled, overdue_amount, messages_processed, escalations_created, llm_tokens_in, llm_tokens_out)\nselect\n  (current_date - 1),\n  (select count(*) from public.contacts where created_at::date = current_date - 1),\n  (select count(*) from public.quotes where created_at::date = current_date - 1),\n  (select count(*) from public.policies where created_at::date = current_date - 1),\n  (select coalesce(sum(premium_total),0) from public.policies where created_at::date = current_date - 1),\n  (select coalesce(sum(net_amount),0) from public.commissions where created_at::date = current_date - 1),\n  (select coalesce(sum(net_amount),0) from public.commissions where status='collected' and collected_at::date = current_date - 1),\n  (select count(*) from public.claims where reported_at::date = current_date - 1),\n  (select count(*) from public.appointments where created_at::date = current_date - 1),\n  (select coalesce(sum(amount),0) from public.payments where status = 'overdue'),\n  (select count(*) from public.messages where created_at::date = current_date - 1),\n  (select count(*) from public.escalations where created_at::date = current_date - 1),\n  (select coalesce(sum(llm_tokens_in),0) from public.messages where created_at::date = current_date - 1),\n  (select coalesce(sum(llm_tokens_out),0) from public.messages where created_at::date = current_date - 1)\non conflict (metric_date) do update set\n  new_leads = excluded.new_leads, quotes_created = excluded.quotes_created, policies_sold = excluded.policies_sold,\n  gross_premium = excluded.gross_premium, commissions_accrued = excluded.commissions_accrued,\n  commissions_collected = excluded.commissions_collected, claims_opened = excluded.claims_opened,\n  appointments_scheduled = excluded.appointments_scheduled, overdue_amount = excluded.overdue_amount,\n  messages_processed = excluded.messages_processed, escalations_created = excluded.escalations_created,\n  llm_tokens_in = excluded.llm_tokens_in, llm_tokens_out = excluded.llm_tokens_out, computed_at = now()\nreturning *;"
+        "query": "insert into public.daily_metrics (metric_date, new_leads, quotes_created, policies_sold, gross_premium, commissions_accrued, commissions_collected, claims_opened, appointments_scheduled, overdue_amount, messages_processed, escalations_created, llm_tokens_in, llm_tokens_out)\nselect\n  (current_date - 1),\n  (select count(*) from public.contacts where created_at::date = current_date - 1),\n  (select count(*) from public.quotes where created_at::date = current_date - 1),\n  (select count(*) from public.policies where created_at::date = current_date - 1),\n  (select coalesce(sum(premium_total),0) from public.policies where created_at::date = current_date - 1),\n  (select coalesce(sum(net_amount),0) from public.commissions where created_at::date = current_date - 1),\n  (select coalesce(sum(net_amount),0) from public.commissions where status='collected' and collected_at::date = current_date - 1),\n  (select count(*) from public.claims where reported_at::date = current_date - 1),\n  (select count(*) from public.appointments where created_at::date = current_date - 1),\n  (select coalesce(sum(amount),0) from public.payments where status = 'overdue'),\n  (select count(*) from public.messages where created_at::date = current_date - 1),\n  (select count(*) from public.escalations where created_at::date = current_date - 1),\n  -- public.messages NO tiene llm_tokens_in/llm_tokens_out. Esas columnas existen\n  -- en daily_metrics, no en messages, y la consulta fallaba ENTERA todos los dias\n  -- a las 08:00: daily_metrics llevaba 0 filas desde siempre y la pantalla de\n  -- Reportes parecia vacia \"porque no hay negocio\", cuando en realidad el calculo\n  -- nunca corrio ni una vez. Se dejan en 0 hasta que se instrumente el consumo de\n  -- tokens en W2; preferible un 0 honesto que perder las otras doce metricas.\n  0,\n  0\non conflict (metric_date) do update set\n  new_leads = excluded.new_leads, quotes_created = excluded.quotes_created, policies_sold = excluded.policies_sold,\n  gross_premium = excluded.gross_premium, commissions_accrued = excluded.commissions_accrued,\n  commissions_collected = excluded.commissions_collected, claims_opened = excluded.claims_opened,\n  appointments_scheduled = excluded.appointments_scheduled, overdue_amount = excluded.overdue_amount,\n  messages_processed = excluded.messages_processed, escalations_created = excluded.escalations_created,\n  llm_tokens_in = excluded.llm_tokens_in, llm_tokens_out = excluded.llm_tokens_out, computed_at = now()\nreturning *;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
@@ -36,7 +36,7 @@
       ],
       "id": "w7-n02-calcular-metricas",
       "name": "Calcular métricas del día anterior",
-      "notes": "llm_cost_usd se deja fuera del cálculo automático aquí (depende de precios por token que cambian por modelo/proveedor) — se puede añadir después como columna calculada o actualizarla aparte.",
+      "notes": "Los dos contadores de tokens van en 0 a proposito: la instrumentacion de consumo no existe todavia en W2. El resto de las metricas si son reales.",
       "credentials": {
         "postgres": {
           "id": "ZOSqufG8JPOkyMXX",
@@ -309,8 +309,8 @@
         "operation": "create",
         "calendar": {
           "__rl": true,
-          "mode": "list",
-          "value": ""
+          "mode": "id",
+          "value": "8d9082e784c319e3809c8bd7951ddffeaba70648623fbf71a9db0478229af3c6@group.calendar.google.com"
         },
         "start": "={{ $('Entrada (tool: agendar_cita)').item.json.starts_at }}",
         "end": "={{ $('Entrada (tool: agendar_cita)').item.json.ends_at }}",
@@ -321,7 +321,7 @@
         "options": {
           "timeZone": {
             "__rl": true,
-            "mode": "list",
+            "mode": "id",
             "value": "America/Caracas"
           }
         }
@@ -334,7 +334,7 @@
       ],
       "id": "w7-n14-crear-evento-gcal",
       "name": "Crear evento en Google Calendar",
-      "notes": "Deshabilitado: sin calendarId configurado, n8n marca el workflow entero como invalido (WorkflowHasIssuesError) y aborta antes de ejecutar, tumbando tambien el guardado de la cita. Reactivar cuando se elija el calendario de Nairobi.",
+      "notes": "Calendario dedicado 'Nairobi OS · Citas', separado de la agenda personal para poder compartirlo o transferirlo a Nairobi en la entrega. onError=continueRegularOutput a proposito: si Google falla, la cita YA quedo guardada en Postgres y el cliente ya recibio su confirmacion. Calendar es espejo, no fuente de verdad.",
       "credentials": {
         "googleCalendarOAuth2Api": {
           "id": "tpDtgWTZDOuGB5nR",
@@ -342,14 +342,14 @@
         }
       },
       "onError": "continueRegularOutput",
-      "disabled": true
+      "disabled": false
     },
     {
       "parameters": {
         "operation": "executeQuery",
         "query": "update public.appointments set gcal_event_id = $2 where id = $1;",
         "options": {
-          "queryReplacement": "={{ [$('Insertar cita en Postgres').item.json.id, $json.id] }}"
+          "queryReplacement": "={{ [$('Insertar cita en Postgres').item.json.id, $json.id ?? null] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -367,8 +367,8 @@
         }
       },
       "onError": "continueRegularOutput",
-      "disabled": true,
-      "notes": "Deshabilitado: sin calendarId configurado, n8n marca el workflow entero como invalido (WorkflowHasIssuesError) y aborta antes de ejecutar, tumbando tambien el guardado de la cita. Reactivar cuando se elija el calendario de Nairobi."
+      "disabled": false,
+      "notes": "Espejo del id de Google en la fila de la cita. Si Calendar fallo, guarda null y la cita sigue siendo valida en Postgres."
     },
     {
       "parameters": {
@@ -586,7 +586,8 @@
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": false,
-    "errorWorkflow": "nairobiOsW9ErrorHd01"
+    "errorWorkflow": "nairobiOsW9ErrorHd01",
+    "timezone": "America/Caracas"
   },
   "pinData": {},
   "tags": [],

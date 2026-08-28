@@ -1,0 +1,18 @@
+{
+  "_nota": "R026. Chat con nai_enabled=true pero sin respuesta de Nai en dias, y mensaje sin ninguna senal de seguros. DEBE quedar silenciado por el prefiltro: 'ya abierta' no puede ser un permiso permanente. Numero inventado, no existe en WhatsApp.",
+  "event": "messages.upsert",
+  "instance": "nairobi-os",
+  "data": {
+    "key": {
+      "remoteJid": "102938475699@lid",
+      "remoteJidAlt": "584121110088@s.whatsapp.net",
+      "fromMe": false,
+      "id": "3EB0EVO0037R026",
+      "addressingMode": "lid"
+    },
+    "pushName": "Prueba chat viejo",
+    "message": { "conversation": "Palabras para vender mejor" },
+    "messageType": "conversation",
+    "messageTimestamp": "__NOW__"
+  }
+}
