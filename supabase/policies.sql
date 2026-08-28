@@ -102,6 +102,30 @@ create policy "Panel: lectura authenticated de reminders"
 create policy "Panel: lectura authenticated de daily_metrics"
   on public.daily_metrics for select to authenticated using (true);
 
--- NOTA: no se agrega policy de lectura para system_errors, settings ni
--- channel_config a propósito — son datos operativos/internos, no deben
--- exponerse al panel salvo que se pida explícitamente.
+-- NOTA: no se agrega policy de lectura para channel_config a propósito —
+-- son datos operativos/internos que no hace falta exponer al panel.
+
+-- ============================================================================
+-- AÑADIDO 2026-08-25 — lectura de settings y system_errors, pedida
+-- explícitamente para el panel "Estado real de Nai" en Configuración
+-- (MensajesPage/ConfiguracionPage, sesión de n8n). settings solo trae
+-- mode/test_allowlist (nada sensible); system_errors puede traer teléfonos
+-- en su payload, pero el panel ya está detrás de Supabase Auth.
+-- ============================================================================
+
+create policy "Panel: lectura authenticated de settings"
+  on public.settings for select to authenticated using (true);
+
+create policy "Panel: lectura authenticated de system_errors"
+  on public.system_errors for select to authenticated using (true);
+
+-- ============================================================================
+-- AÑADIDO 2026-08-19 (Vision) — lectura para integration_settings
+-- (migration_04_integration_settings.sql). A diferencia de channel_config,
+-- esta tabla SÍ debe ser legible por el panel: es lo que alimenta el badge
+-- "Estado del Sistema" de la pantalla Configuración. Solo guarda metadata
+-- operativa, nunca secretos — ver comentario en la propia tabla.
+-- ============================================================================
+
+create policy "Panel: lectura authenticated de integration_settings"
+  on public.integration_settings for select to authenticated using (true);

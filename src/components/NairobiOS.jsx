@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
   Home, Users, FileText, ShieldCheck, AlertTriangle, DollarSign, Calendar,
-  MessageSquare, Building2, Percent, BarChart3, Settings, Bell, Search,
+  MessageSquare, Building2, Percent, BarChart3, Settings, Bell,
   Phone, Mail, Sparkles, Bot, CheckCircle2, Clock, TrendingUp, TrendingDown,
   Send, Paperclip, Smile, MoreVertical, ChevronRight, Plus, Filter, X,
   Link2, Zap, KeyRound, Save, RefreshCw, Star, Flag, ArrowUpRight,
@@ -263,7 +263,19 @@ function Sidebar({ active, setActive, open, setOpen }) {
   );
 }
 
-function TopBar({ title, onMenu, userEmail, onSignOut }) {
+function TopBar({ title, onMenu, userEmail, onSignOut, onBell }) {
+  // La campana mostraba un punto rojo fijo, sin nada detrás. Ahora cuenta
+  // escalaciones sin resolver reales y lleva a la bandeja al hacer clic.
+  const [pendientes, setPendientes] = useState(0);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("escalations")
+      .select("id", { count: "exact", head: true })
+      .is("resolved_at", null)
+      .then(({ count }) => setPendientes(count || 0));
+  }, []);
+
   const initials = (userEmail || "Usuario")
     .split(/[@ ]/)[0]
     .split(/[.\s]/)
@@ -277,15 +289,20 @@ function TopBar({ title, onMenu, userEmail, onSignOut }) {
         <button onClick={onMenu} className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-50 md:hidden">
           <Menu size={19} />
         </button>
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 ring-1 ring-slate-200/70 sm:w-72 sm:flex-none">
-          <Search size={14} className="shrink-0 text-slate-400" />
-          <input placeholder={`Buscar en ${title.toLowerCase()}...`} className="w-full min-w-0 bg-transparent text-sm text-slate-600 placeholder:text-slate-400 focus:outline-none" />
-        </div>
+        <h1 className="min-w-0 truncate text-sm font-semibold text-slate-600">{title}</h1>
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-        <button className="relative rounded-full p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600">
+        <button
+          onClick={onBell}
+          title={pendientes ? `${pendientes} escalación(es) sin resolver` : "Sin escalaciones pendientes"}
+          className="relative rounded-full p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+        >
           <Bell size={17} />
-          <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-red-500" />
+          {pendientes > 0 && (
+            <span className="absolute right-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[9px] font-semibold text-white">
+              {pendientes > 9 ? "9+" : pendientes}
+            </span>
+          )}
         </button>
         <div className="flex items-center gap-2 rounded-full bg-slate-50 py-1 pl-1 pr-1 ring-1 ring-slate-200/70 sm:pr-2">
           <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-[11px] font-semibold text-white">{initials}</div>
@@ -301,12 +318,88 @@ function TopBar({ title, onMenu, userEmail, onSignOut }) {
 
 /* ---------------------------------- PAGES ---------------------------------- */
 
+// Estados que cuentan como "todavía abierto" en cada tabla. Salen de los check
+// constraints reales de supabase/migration_02_core_tables.sql — no se inventan.
+const CLAIM_ABIERTO = ["reported", "documents_pending", "submitted", "in_review"];
+const QUOTE_CERRADA = ["accepted", "rejected", "expired"];
+
 function InicioPage({ setActive }) {
-  // Sin alertas de ejemplo: Nai poblará esta sección cuando existan eventos reales.
-  const alerts = [];
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const iniHoy = new Date(); iniHoy.setHours(0, 0, 0, 0);
+    const finHoy = new Date(); finHoy.setHours(23, 59, 59, 999);
+    const iniMes = new Date(); iniMes.setDate(1); iniMes.setHours(0, 0, 0, 0);
+    const hace30d = new Date(Date.now() - 30 * 864e5);
+
+    Promise.all([
+      supabase.from("appointments").select("id, title, purpose, starts_at, status, contacts(name, phone)")
+        .gte("starts_at", iniHoy.toISOString()).lte("starts_at", finHoy.toISOString()),
+      supabase.from("claims").select("id, status, severity, incident_type, reported_at, contacts(name, phone)"),
+      supabase.from("payments").select("id, amount, currency, due_date, status, contacts(name, phone)"),
+      supabase.from("quotes").select("id, status, created_at, contacts(name, phone)"),
+      supabase.from("policies").select("id, status, premium_total"),
+      supabase.from("commissions").select("id, net_amount, status, collected_at"),
+      supabase.from("escalations").select("id, reason, urgency, resolved_at, created_at, contacts(name, phone)"),
+      supabase.from("messages").select("id", { count: "exact", head: true }).gte("created_at", new Date(Date.now() - 864e5).toISOString()),
+      supabase.from("insurers").select("id", { count: "exact", head: true }).eq("status", "active"),
+    ]).then(([citas, claims, pagos, quotes, pols, coms, escs, msgs, asegs]) => {
+      const primerError = [citas, claims, pagos, quotes, pols, coms, escs].find((r) => r.error);
+      if (primerError) { setErr(primerError.error.message); return; }
+      const c = claims.data || [], p = pagos.data || [], q = quotes.data || [];
+      const po = pols.data || [], co = coms.data || [], es = (escs.data || []).filter((e) => !e.resolved_at);
+
+      const claimsAbiertos = c.filter((x) => CLAIM_ABIERTO.includes(x.status));
+      const vencidos = p.filter((x) => x.status === "overdue");
+      const proximos = p.filter((x) => x.status === "pending");
+      const quotesNuevas = q.filter((x) => !QUOTE_CERRADA.includes(x.status) && new Date(x.created_at) >= hace30d);
+      const manualPending = q.filter((x) => x.status === "manual_pending");
+      const sum = (arr, k) => arr.reduce((s, x) => s + Number(x[k] || 0), 0);
+
+      // Atención prioritaria: se arma solo con hechos reales de la base.
+      const alerts = [];
+      for (const e of es.slice(0, 3)) {
+        alerts.push({ icon: Flag, tone: "bg-red-50 text-red-600",
+          text: `Escalación pendiente de ${e.contacts?.name || e.contacts?.phone || "un cliente"}: ${e.reason || "sin motivo registrado"}.`, go: "mensajes" });
+      }
+      for (const x of c.filter((x) => ["severe", "fatal"].includes(x.severity) && CLAIM_ABIERTO.includes(x.status)).slice(0, 3)) {
+        alerts.push({ icon: AlertTriangle, tone: "bg-red-50 text-red-600",
+          text: `Siniestro grave sin cerrar (${x.incident_type || "sin tipo"}) de ${x.contacts?.name || x.contacts?.phone || "un cliente"}.`, go: "siniestros" });
+      }
+      if (vencidos.length) alerts.push({ icon: DollarSign, tone: "bg-red-50 text-red-600",
+        text: `${vencidos.length} pago(s) vencido(s) por $${sum(vencidos, "amount").toLocaleString()}.`, go: "cobranzas" });
+      if (manualPending.length) alerts.push({ icon: FileText, tone: "bg-amber-50 text-amber-600",
+        text: `${manualPending.length} cotización(es) esperan tarifa manual — ninguna aseguradora devolvió precio.`, go: "cotizaciones" });
+
+      setD({
+        alerts,
+        citasHoy: citas.data || [],
+        claimsAbiertos: claimsAbiertos.length,
+        claimsResueltos: c.length - claimsAbiertos.length,
+        pagosProximos: proximos.length,
+        pagosVencidos: vencidos.length,
+        quotesNuevas: quotesNuevas.length,
+        quotesGanadas: q.filter((x) => x.status === "accepted").length,
+        gananciasMes: sum(co.filter((x) => x.status === "collected" && x.collected_at && new Date(x.collected_at) >= iniMes), "net_amount"),
+        comisionesAcum: sum(co.filter((x) => x.status !== "cancelled"), "net_amount"),
+        polizasActivas: po.filter((x) => x.status === "active").length,
+        primaTotal: sum(po, "premium_total"),
+        mensajes24h: msgs.count ?? 0,
+        asegurActivas: asegs.count ?? 0,
+      });
+    });
+  }, []);
+
+  const alerts = d?.alerts || [];
+  const n = (v) => (d ? v : "…");
   return (
     <div>
-      <PageHeader title="Buenos días, Nairobi." subtitle="Tienes el control total de tu operación." />
+      <PageHeader
+        title="Buenos días, Nairobi."
+        subtitle={err ? `No se pudo cargar el resumen: ${err}` : "Tienes el control total de tu operación."}
+      />
       <div className="flex flex-col gap-5 md:grid md:grid-cols-3">
         <div className="space-y-5 md:col-span-2">
           <Card title="Atención Prioritaria" icon={Sparkles} action={<NaiTag>Highlights inteligentes de Nai</NaiTag>}>
@@ -317,12 +410,17 @@ function InicioPage({ setActive }) {
                 {alerts.map((a, i) => {
                   const Icon = a.icon;
                   return (
-                    <div key={i} className="flex items-start gap-3 rounded-xl border border-slate-100 p-3">
+                    <button
+                      key={i}
+                      onClick={() => a.go && setActive(a.go)}
+                      className="flex w-full items-start gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:bg-slate-50"
+                    >
                       <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${a.tone}`}>
                         <Icon size={15} />
                       </div>
                       <p className="pt-1 text-sm text-slate-600">{a.text}</p>
-                    </div>
+                      <ChevronRight size={15} className="ml-auto mt-1.5 shrink-0 text-slate-300" />
+                    </button>
                   );
                 })}
               </div>
@@ -331,26 +429,18 @@ function InicioPage({ setActive }) {
 
           <Card title="Operación de Hoy" icon={CircleDot}>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <div>
-                <p className="text-xs text-slate-400">Citas</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">0 hoy</p>
-                <p className="text-xs text-slate-400">Sin citas agendadas</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Siniestros Activos</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">0 Reportados</p>
-                <p className="text-xs text-slate-400">0 Resueltos</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Cobranzas</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">0 Pagos Próximos</p>
-                <p className="text-xs text-slate-400">0 Vencidos</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Cotizaciones</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">0 Nuevas</p>
-                <p className="text-xs text-slate-400">0 Ganadas</p>
-              </div>
+              {[
+                { l: "Citas", v: `${n(d?.citasHoy.length ?? 0)} hoy`, s: d?.citasHoy.length ? d.citasHoy.map((c) => new Date(c.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })).join(", ") : "Sin citas agendadas", go: "citas" },
+                { l: "Siniestros Activos", v: `${n(d?.claimsAbiertos ?? 0)} Abiertos`, s: `${n(d?.claimsResueltos ?? 0)} Resueltos`, go: "siniestros" },
+                { l: "Cobranzas", v: `${n(d?.pagosProximos ?? 0)} Pagos Próximos`, s: `${n(d?.pagosVencidos ?? 0)} Vencidos`, go: "cobranzas" },
+                { l: "Cotizaciones", v: `${n(d?.quotesNuevas ?? 0)} Nuevas`, s: `${n(d?.quotesGanadas ?? 0)} Ganadas`, go: "cotizaciones" },
+              ].map((x) => (
+                <button key={x.l} onClick={() => setActive(x.go)} className="rounded-lg text-left transition hover:bg-slate-50">
+                  <p className="text-xs text-slate-400">{x.l}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-700">{x.v}</p>
+                  <p className="truncate text-xs text-slate-400">{x.s}</p>
+                </button>
+              ))}
             </div>
           </Card>
 
@@ -365,17 +455,19 @@ function InicioPage({ setActive }) {
         <div className="space-y-5">
           <Card title="Resumen Financiero" icon={DollarSign}>
             <div className="space-y-3">
-              <StatCard label="Ganancias del Mes" value="$0.00" />
-              <StatCard label="Comisiones Acumuladas" value="$0.00" />
-              <StatCard label="Pólizas Vendidas" value="0" />
+              <StatCard label="Ganancias del Mes" value={`$${n((d?.gananciasMes ?? 0).toLocaleString())}`} sub="Comisiones cobradas este mes" />
+              <StatCard label="Comisiones Acumuladas" value={`$${n((d?.comisionesAcum ?? 0).toLocaleString())}`} />
+              <StatCard label="Pólizas Activas" value={String(n(d?.polizasActivas ?? 0))} sub={`$${(d?.primaTotal ?? 0).toLocaleString()} en prima emitida`} />
             </div>
           </Card>
 
           <Card title="Nai Trabaja. Tú Decides." icon={Bot}>
             <ul className="space-y-3 text-sm text-slate-600">
-              <li className="flex gap-2"><Clock size={15} className="mt-0.5 shrink-0 text-slate-400" />Aún no hay actividad registrada de Nai en esta cuenta.</li>
+              <li className="flex gap-2"><Clock size={15} className="mt-0.5 shrink-0 text-slate-400" />
+                {d ? `${d.mensajes24h} mensaje(s) procesados en las últimas 24 h.` : "Cargando actividad de Nai…"}</li>
               <li className="flex gap-2"><Link2 size={15} className="mt-0.5 shrink-0 text-indigo-500" />Integraciones: estado real disponible en Configuración.</li>
-              <li className="flex gap-2"><Building2 size={15} className="mt-0.5 shrink-0 text-slate-400" />0 aseguradoras conectadas por ahora.</li>
+              <li className="flex gap-2"><Building2 size={15} className="mt-0.5 shrink-0 text-slate-400" />
+                {d ? `${d.asegurActivas} aseguradora(s) activas para cotizar.` : "Consultando aseguradoras…"}</li>
             </ul>
           </Card>
         </div>
@@ -400,8 +492,12 @@ async function callAppWebApi(resource, body) {
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`n8n respondió ${res.status}`);
-  return res.json().catch(() => ({}));
+  const data = await res.json().catch(() => ({}));
+  // W8 responde 400 con { ok:false, error } cuando el dato es inválido (por
+  // ejemplo un teléfono ilegible). Ese texto está escrito para que Nairobi lo
+  // entienda, así que se propaga tal cual en vez de "n8n respondió 400".
+  if (!res.ok) throw new Error(data?.error || `n8n respondió ${res.status}`);
+  return data;
 }
 
 // Traduce el resultado real del clasificador de W2 (metadata.classification)
@@ -432,14 +528,30 @@ function MensajesPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [toggling, setToggling] = useState(false);
+  const [ocultas, setOcultas] = useState(0);
+  const [verTodas, setVerTodas] = useState(false);
+  const [borrador, setBorrador] = useState("");
+  const [enviando, setEnviando] = useState(false);
   const isMobile = useIsMobile();
+
+  // El WhatsApp que alimenta a Nai es un número personal: por él entran también
+  // conversaciones privadas (familia, amigos) que no son del negocio. La bandeja
+  // solo debe mostrar lo que es trabajo de la corredora — nadie que abra este
+  // panel tiene por qué leer los chats personales de nadie.
+  function esConversacionDeNegocio(c) {
+    if (c.metadata?.nai_enabled === true) return true;              // la compuerta la abrió
+    if ((c.contacts?.policies || []).length > 0) return true;       // cliente con póliza
+    return (c.messages || []).some(
+      (m) => m.direction === "outbound" || esSenalDeNegocio(m.metadata?.classification),
+    );
+  }
 
   function loadConversations() {
     if (!isSupabaseConfigured) return;
     setLoading(true);
     supabase
       .from("conversations")
-      .select("id, status, should_respond, metadata, created_at, contacts(phone), messages(id, message_text, direction, metadata, created_at)")
+      .select("id, status, should_respond, metadata, created_at, contacts(phone, policies(id)), messages(id, message_text, direction, metadata, created_at)")
       .order("created_at", { ascending: false })
       .order("created_at", { foreignTable: "messages", ascending: true })
       .limit(30)
@@ -447,7 +559,9 @@ function MensajesPage() {
         setLoading(false);
         if (error) { setErr(error.message); return; }
         if (!data) return;
-        const mapped = data.map((c) => {
+        const negocio = data.filter(esConversacionDeNegocio);
+        setOcultas(data.length - negocio.length);
+        const mapped = (verTodas ? data : negocio).map((c) => {
           const msgs = c.messages || [];
           const last = msgs[msgs.length - 1];
           return {
@@ -473,7 +587,7 @@ function MensajesPage() {
       });
   }
 
-  useEffect(() => { loadConversations(); }, []);
+  useEffect(() => { loadConversations(); }, [verTodas]);
 
   async function toggleBot(conv) {
     if (!conv?.telefono || conv.telefono === "—") return;
@@ -485,6 +599,26 @@ function MensajesPage() {
       setErr(`No se pudo cambiar el modo vía n8n: ${e.message}`);
     } finally {
       setToggling(false);
+    }
+  }
+
+  // Respuesta manual de Nairobi desde el panel. Sale por el mismo recurso
+  // send-message de W8 que ya usan Cotizaciones y Siniestros — el panel nunca
+  // habla con WhatsApp directamente.
+  async function enviarManual() {
+    const texto = borrador.trim();
+    if (!texto || !selected?.telefono || selected.telefono === "—") return;
+    setEnviando(true);
+    setErr("");
+    try {
+      const res = await callAppWebApi("send-message", { chat_id: selected.telefono, message: texto });
+      if (res.ok === false) throw new Error(res.error || "n8n rechazó el envío");
+      setBorrador("");
+      loadConversations();
+    } catch (e) {
+      setErr(`No se pudo enviar: ${e.message}`);
+    } finally {
+      setEnviando(false);
     }
   }
 
@@ -500,6 +634,19 @@ function MensajesPage() {
             : "Bandeja de entrada unificada de WhatsApp, supervisada por Nai (conecta Supabase en .env)."
         }
       />
+      {ocultas > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 ring-1 ring-inset ring-slate-200">
+          <ShieldCheck size={13} className="text-slate-400" />
+          <span>
+            {verTodas
+              ? `Mostrando también ${ocultas} conversación(es) personal(es), ajenas al negocio.`
+              : `${ocultas} conversación(es) personal(es) ocultas — solo se muestra lo que es trabajo de la corredora.`}
+          </span>
+          <button onClick={() => setVerTodas((v) => !v)} className="ml-auto font-medium text-slate-600 underline underline-offset-2">
+            {verTodas ? "Ocultarlas" : "Ver todas"}
+          </button>
+        </div>
+      )}
       {!selected ? (
         <EmptyState icon={MessageSquare} title="Sin conversaciones todavía" subtitle="En cuanto lleguen mensajes de WhatsApp a través de n8n, aparecerán aquí." />
       ) : (
@@ -561,14 +708,28 @@ function MensajesPage() {
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
               <Smile size={16} className="text-slate-400" />
               <Paperclip size={16} className="text-slate-400" />
-              <input placeholder="Escribe un mensaje... (respuesta manual — pendiente de conectar)" className="flex-1 bg-transparent text-sm focus:outline-none" disabled />
+              <input
+                value={borrador}
+                onChange={(e) => setBorrador(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !enviando) enviarManual(); }}
+                placeholder={enviando ? "Enviando…" : "Escribe un mensaje..."}
+                disabled={enviando}
+                className="flex-1 bg-transparent text-sm focus:outline-none"
+              />
               <div className="flex items-center gap-2 border-l border-slate-200 pl-2">
                 <Toggle
                   on={selected.should_respond}
                   onClick={() => !toggling && toggleBot(selected)}
                   label={toggling ? "..." : selected.should_respond ? "Automatizado" : "Manual"}
                 />
-                <button className="rounded-lg bg-blue-600 p-1.5 text-white opacity-50" disabled title="Envío manual pendiente de conectar"><Send size={14} /></button>
+                <button
+                  onClick={enviarManual}
+                  disabled={enviando || !borrador.trim()}
+                  title="Enviar por WhatsApp"
+                  className="rounded-lg bg-blue-600 p-1.5 text-white disabled:opacity-50"
+                >
+                  <Send size={14} />
+                </button>
               </div>
             </div>
           </div>
@@ -611,6 +772,23 @@ function CreateModal({ title, fields, resource, onClose, onCreated }) {
   const [values, setValues] = useState(Object.fromEntries(fields.map((f) => [f.name, f.default || ""])));
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
   const [errMsg, setErrMsg] = useState("");
+  // Opciones que vienen de la base (aseguradoras, productos): el formulario
+  // muestra el nombre y manda el id real, sin que haya que teclear UUIDs.
+  const [remote, setRemote] = useState({});
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    for (const f of fields.filter((x) => x.loadOptions)) {
+      const { table, valueCol, labelCol, eq } = f.loadOptions;
+      let qb = supabase.from(table).select(`${valueCol}, ${labelCol}`).order(labelCol);
+      if (eq) qb = qb.eq(eq[0], eq[1]);
+      qb.then(({ data }) => {
+        const opts = (data || []).map((r) => ({ value: r[valueCol], label: r[labelCol] }));
+        setRemote((m) => ({ ...m, [f.name]: opts }));
+        if (opts.length) setValues((v) => (v[f.name] ? v : { ...v, [f.name]: opts[0].value }));
+      });
+    }
+  }, []);
 
   async function submit() {
     setStatus("loading");
@@ -645,13 +823,14 @@ function CreateModal({ title, fields, resource, onClose, onCreated }) {
           {fields.map((f) => (
             <div key={f.name}>
               <label className="mb-1 block text-xs font-medium text-slate-500">{f.label}</label>
-              {f.type === "select" ? (
+              {f.type === "select" || f.loadOptions ? (
                 <select
                   value={values[f.name]}
                   onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
                 >
-                  {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                  {(f.loadOptions ? (remote[f.name] || []) : f.options.map((o) => (typeof o === "string" ? { value: o, label: o } : o)))
+                    .map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               ) : (
                 <input
@@ -688,6 +867,35 @@ function SiniestrosPage() {
   const [err, setErr] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
+  const [aviso, setAviso] = useState("");
+  const [fEstado, setFEstado] = useState("");
+  const [fAseguradora, setFAseguradora] = useState("");
+  const [fTexto, setFTexto] = useState("");
+
+  const visibles = rows.filter((r) => {
+    if (fEstado && r.estado !== fEstado) return false;
+    if (fAseguradora && r.aseguradora !== fAseguradora) return false;
+    const q = fTexto.trim().toLowerCase();
+    if (q && !`${r.cliente} ${r.tipo} ${r.poliza}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  // Avisa al cliente por WhatsApp en qué va su siniestro, usando el mismo
+  // canal que Nai (W8 → send-message → Evolution). El panel no envía nada
+  // por su cuenta.
+  async function notificarCliente() {
+    if (!selected?.telefono) return;
+    setAviso("Enviando…");
+    try {
+      const res = await callAppWebApi("send-message", {
+        chat_id: selected.telefono,
+        message: `Hola ${selected.cliente}, te escribo por tu siniestro (${selected.tipo}). Estado actual: ${selected.estado}. Cualquier duda, aquí estoy.`,
+      });
+      setAviso(res?.ok ? "Mensaje enviado al cliente." : `No se pudo enviar: ${res?.error || "error de n8n"}`);
+    } catch (e) {
+      setAviso(`No se pudo enviar: ${e.message}`);
+    }
+  }
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -702,6 +910,7 @@ function SiniestrosPage() {
         const mapped = data.map((c) => ({
           id: c.id,
           cliente: c.contacts?.name || c.contacts?.phone || "Cliente",
+          telefono: c.contacts?.phone || "",
           poliza: c.policies?.policy_number || "—",
           tipo: c.incident_type || "Sin especificar",
           aseguradora: c.policies?.insurers?.name || "—",
@@ -741,10 +950,34 @@ function SiniestrosPage() {
       ) : (
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
         <div className="overflow-hidden overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200/70 md:col-span-9">
-          <div className="flex items-center gap-2 border-b border-slate-100 p-3">
-            <button className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500"><Filter size={13} />Estado</button>
-            <button className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-500"><Building2 size={13} />Aseguradora</button>
-            <input placeholder="Filtrar..." className="ml-auto w-48 rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:outline-none" />
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
+            <span className="flex items-center gap-1.5 text-xs text-slate-400"><Filter size={13} />Filtrar</span>
+            <select
+              value={fEstado}
+              onChange={(e) => setFEstado(e.target.value)}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 focus:outline-none"
+            >
+              <option value="">Todos los estados</option>
+              {[...new Set(rows.map((r) => r.estado).filter(Boolean))].map((e) => (
+                <option key={e} value={e}>{e}</option>
+              ))}
+            </select>
+            <select
+              value={fAseguradora}
+              onChange={(e) => setFAseguradora(e.target.value)}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 focus:outline-none"
+            >
+              <option value="">Todas las aseguradoras</option>
+              {[...new Set(rows.map((r) => r.aseguradora).filter((a) => a && a !== "—"))].map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+            <input
+              value={fTexto}
+              onChange={(e) => setFTexto(e.target.value)}
+              placeholder="Buscar cliente o tipo..."
+              className="ml-auto w-48 rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:outline-none"
+            />
           </div>
           <table className="w-full text-sm">
             <thead>
@@ -759,7 +992,7 @@ function SiniestrosPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((c) => (
+              {visibles.map((c) => (
                 <tr
                   key={c.id}
                   onClick={() => setSelected(c)}
@@ -795,7 +1028,15 @@ function SiniestrosPage() {
               </Card>
               <Card className="border-red-100" title="Estado del Siniestro" icon={AlertTriangle}>
                 <p className="text-xs text-slate-500">Estado actual: {selected.estado}.</p>
-                <button className="mt-3 w-full rounded-lg bg-red-600 py-1.5 text-xs font-semibold text-white hover:bg-red-700">Notificar Cliente</button>
+                <button
+                  onClick={notificarCliente}
+                  disabled={!selected.telefono || aviso === "Enviando…"}
+                  className="mt-3 w-full rounded-lg bg-red-600 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  Notificar Cliente
+                </button>
+                {!selected.telefono && <p className="mt-1.5 text-[11px] text-slate-400">Este siniestro no tiene un teléfono asociado.</p>}
+                {aviso && <p className="mt-1.5 text-[11px] text-slate-500">{aviso}</p>}
               </Card>
             </>
           )}
@@ -806,11 +1047,103 @@ function SiniestrosPage() {
   );
 }
 
+// Pide una cotización real a n8n (W8 → W3). Los campos que se piden no están
+// hardcodeados: salen de products.rating_factors, la misma lista que W3 usa
+// para decidir si faltan datos — así el formulario nunca queda desalineado.
+function QuoteCreateModal({ onClose, onCreated }) {
+  const [productos, setProductos] = useState([]);
+  const [code, setCode] = useState("");
+  const [phone, setPhone] = useState("");
+  const [inputs, setInputs] = useState({});
+  const [status, setStatus] = useState("idle");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase.from("products").select("code, name, rating_factors").eq("is_active", true).order("name")
+      .then(({ data }) => {
+        setProductos(data || []);
+        if (data?.length) setCode(data[0].code);
+      });
+  }, []);
+
+  const factores = productos.find((p) => p.code === code)?.rating_factors || [];
+
+  async function submit() {
+    setStatus("loading"); setMsg("");
+    try {
+      const res = await callAppWebApi("quote", {
+        contact_chat_id: phone,
+        product_code: code,
+        inputs_json: JSON.stringify(inputs),
+      });
+      if (!res?.ok) throw new Error(res?.error || "n8n respondió sin éxito");
+      const data = res.data || {};
+      if (data.result === "need_more_info") {
+        setStatus("error");
+        setMsg(`Faltan datos: ${(data.missing_fields || []).join(", ")}`);
+        return;
+      }
+      setStatus("success");
+      setMsg(data.status === "manual_pending"
+        ? "Cotización creada, pero ninguna aseguradora tiene tarifa cargada. Queda para cotizar a mano."
+        : "Cotización generada.");
+      onCreated?.();
+      setTimeout(onClose, 1800);
+    } catch (e) {
+      setStatus("error"); setMsg(e.message);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800">Nueva Cotización</h3>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-50"><X size={16} /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Teléfono del cliente (debe existir en Clientes)</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="584121234567"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Producto</label>
+            <select value={code} onChange={(e) => { setCode(e.target.value); setInputs({}); }}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none">
+              {productos.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
+            </select>
+          </div>
+          {factores.map((f) => (
+            <div key={f}>
+              <label className="mb-1 block text-xs font-medium capitalize text-slate-500">{f.replace(/_/g, " ")}</label>
+              <input value={inputs[f] ?? ""} onChange={(e) => setInputs((v) => ({ ...v, [f]: e.target.value }))}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+            </div>
+          ))}
+        </div>
+        <button onClick={submit} disabled={status === "loading" || !phone || !code}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+          {status === "loading" ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+          Cotizar
+        </button>
+        {msg && <p className={`mt-2 text-center text-xs ${status === "success" ? "text-emerald-600" : "text-red-500"}`}>{msg}</p>}
+        {!N8N_APP_WEB_URL && <p className="mt-2 text-center text-xs text-amber-600">VITE_N8N_APP_WEB_URL no configurado — este formulario no puede llegar a n8n.</p>}
+      </div>
+    </div>
+  );
+}
+
 function CotizacionesPage() {
+  const [quotes, setQuotes] = useState([]);
   const [quote, setQuote] = useState(null);
   const [lines, setLines] = useState(QUOTE_INSURERS);
   const [live, setLive] = useState(false);
   const [err, setErr] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [envio, setEnvio] = useState("");
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -819,42 +1152,93 @@ function CotizacionesPage() {
       // quote_lines!quote_lines_quote_id_fkey desambigua: hay dos relaciones
       // entre quotes y quote_lines (quote_lines.quote_id → quotes.id, y
       // quotes.best_line_id → quote_lines.id) y PostgREST no puede elegir sola.
-      .select("id, status, created_at, contacts(name, phone), quote_lines!quote_lines_quote_id_fkey(id, premium, coverage_sum, commission_pct, rank, unavailable_reason, insurers(name))")
+      .select("id, status, created_at, recommendation, contacts(name, phone), products(name), quote_lines!quote_lines_quote_id_fkey(id, premium, coverage_sum, commission_pct, rank, unavailable_reason, insurers(name))")
       .order("created_at", { ascending: false })
-      .limit(1)
+      .limit(25)
       .then(({ data, error }) => {
         if (error) { setErr(error.message); return; }
-        const q = data?.[0];
-        if (!q) return;
-        setQuote(q);
-        const mapped = (q.quote_lines || [])
-          .filter((l) => l.premium != null)
-          .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
-          .map((l, i) => ({
-            key: String.fromCharCode(65 + i),
-            name: l.insurers?.name || "—",
-            price: `$${l.premium}`,
-            coverage: l.coverage_sum ? `$${l.coverage_sum}` : "—",
-            commission: l.commission_pct ? `${l.commission_pct}%` : "—",
-            score: Math.max(0, 100 - i * 8),
-            rec: i === 0 ? "Mejor opción" : `${Math.max(50, 90 - i * 10)}%`,
-          }));
-        setLines(mapped);
+        setQuotes(data || []);
         setLive(true);
+        if (data?.length) setQuote((prev) => data.find((x) => x.id === prev?.id) || data[0]);
       });
-  }, []);
+  }, [reloadTick]);
+
+  useEffect(() => {
+    const mapped = (quote?.quote_lines || [])
+      .filter((l) => l.premium != null)
+      .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
+      .map((l, i) => ({
+        key: String.fromCharCode(65 + i),
+        name: l.insurers?.name || "—",
+        price: `$${l.premium}`,
+        coverage: l.coverage_sum ? `$${l.coverage_sum}` : "—",
+        commission: l.commission_pct ? `${l.commission_pct}%` : "—",
+        score: Math.max(0, 100 - i * 8),
+        rec: i === 0 ? "Mejor opción" : `${Math.max(50, 90 - i * 10)}%`,
+      }));
+    setLines(mapped);
+  }, [quote]);
+
+  // "Generar Propuesta" manda al cliente, por WhatsApp, la recomendación real
+  // que W3 ya calculó — no genera texto nuevo desde el panel.
+  async function enviarPropuesta() {
+    if (!quote?.contacts?.phone) { setEnvio("Esta cotización no tiene un teléfono asociado."); return; }
+    const mejor = lines[0];
+    if (!mejor) { setEnvio("Todavía no hay ninguna opción con precio para proponer."); return; }
+    setEnvio("Enviando…");
+    try {
+      const texto = quote.recommendation
+        || `Hola${quote.contacts?.name ? " " + quote.contacts.name : ""}, te comparto la mejor opción que conseguí para tu ${quote.products?.name || "seguro"}: ${mejor.name} por ${mejor.price} al año. ¿Te la reservo?`;
+      const res = await callAppWebApi("send-message", { chat_id: quote.contacts.phone, message: texto });
+      setEnvio(res?.ok ? "Propuesta enviada al cliente por WhatsApp." : `No se pudo enviar: ${res?.error || "error de n8n"}`);
+    } catch (e) {
+      setEnvio(`No se pudo enviar: ${e.message}`);
+    }
+  }
 
   const chartData = lines.map((q) => ({ name: q.name, Precio: parseInt(q.price.replace("$", "")) || 0, Cobertura: q.score }));
   return (
     <div>
+      {showCreate && <QuoteCreateModal onClose={() => setShowCreate(false)} onCreated={() => setReloadTick((t) => t + 1)} />}
       <PageHeader
         title="Comparador de Cotizaciones Multi-Aseguradora"
-        subtitle={live ? `Última cotización — ${quote?.contacts?.name || quote?.contacts?.phone || "cliente"} (${QUOTE_STATUS_LABEL[quote?.status] || quote?.status}).` : "Compara precios y comisiones entre tus aseguradoras conectadas."}
-        right={<PrimaryButton icon={FileText}>Generar Propuesta</PrimaryButton>}
+        subtitle={live
+          ? `${quotes.length} cotización(es) registradas${quote ? ` — viendo la de ${quote.contacts?.name || quote.contacts?.phone || "cliente"} (${QUOTE_STATUS_LABEL[quote.status] || quote.status})` : ""}.`
+          : "Compara precios y comisiones entre tus aseguradoras conectadas."}
+        right={
+          <div className="flex gap-2">
+            <PrimaryButton icon={Sparkles} onClick={() => setShowCreate(true)}>Nueva Cotización</PrimaryButton>
+            <button onClick={enviarPropuesta} disabled={!lines.length}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">
+              <FileText size={15} /> Generar Propuesta
+            </button>
+          </div>
+        }
       />
       {err && <p className="mb-3 text-xs text-red-500">No se pudo leer quotes: {err}</p>}
+      {envio && <p className="mb-3 text-xs text-slate-500">{envio}</p>}
+
+      {quotes.length > 0 && (
+        <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+          {quotes.map((q) => (
+            <button key={q.id} onClick={() => { setQuote(q); setEnvio(""); }}
+              className={`shrink-0 rounded-xl border px-3 py-2 text-left text-xs transition ${
+                quote?.id === q.id ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+              <p className="font-medium text-slate-700">{q.contacts?.name || q.contacts?.phone || "Cliente"}</p>
+              <p className="text-slate-400">{q.products?.name || "—"} · {QUOTE_STATUS_LABEL[q.status] || q.status}</p>
+            </button>
+          ))}
+        </div>
+      )}
+
       {lines.length === 0 ? (
-        <EmptyState icon={FileText} title="Sin cotizaciones activas" subtitle="Cuando se solicite una cotización, el comparador multi-aseguradora aparecerá aquí." />
+        <EmptyState
+          icon={FileText}
+          title={quotes.length ? "Esta cotización no tiene opciones con precio" : "Sin cotizaciones activas"}
+          subtitle={quotes.length
+            ? "Ninguna aseguradora devolvió una tarifa vigente para este producto. Hay que cargar las tarifas o cotizarla a mano."
+            : "Crea una con “Nueva Cotización”, o espera a que un cliente la pida por WhatsApp."}
+        />
       ) : (
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
         <div className="space-y-5 md:col-span-9">
@@ -915,7 +1299,16 @@ function CotizacionesPage() {
 
         <div className="space-y-4 md:col-span-3">
           <Card title="Nai Acción Recomendada" icon={Sparkles}>
-            <p className="text-xs text-slate-500">Nai sugerirá la mejor opción en cuanto haya cotizaciones activas para comparar.</p>
+            {quote?.recommendation ? (
+              <>
+                <p className="whitespace-pre-line text-xs text-slate-600">{quote.recommendation}</p>
+                <button onClick={enviarPropuesta} className="mt-3 w-full rounded-lg bg-blue-600 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                  Enviar esta propuesta al cliente
+                </button>
+              </>
+            ) : (
+              <p className="text-xs text-slate-500">Nai todavía no ha dejado una recomendación escrita para esta cotización.</p>
+            )}
           </Card>
           <Card title="Timeline de Cotización" icon={Clock}>
             {["Solicitud Recibida · Nai", "Cotizaciones Generadas · Nai", "Comparación Activa · Usuario", "Propuesta Seleccionada · Automatización", "Cierre"].map((t, i) => (
@@ -937,6 +1330,7 @@ function ReportesPage() {
   const [totals, setTotals] = useState({ ventas: 0, comisionesAcum: 0, ingresosAcum: 0 });
   const [live, setLive] = useState(false);
   const [err, setErr] = useState("");
+  const [reloadTick, setReloadTick] = useState(0);
   const PALETTE = ["#2563eb", "#0ea5e9", "#6366f1", "#0d9488", "#7c3aed", "#f59e0b", "#ef4444", "#10b981", "#64748b"];
 
   useEffect(() => {
@@ -964,11 +1358,11 @@ function ReportesPage() {
       });
       setLive(true);
     });
-  }, []);
+  }, [reloadTick]);
 
   return (
     <div>
-      <PageHeader title="Centro Financiero de Inteligencia" subtitle={live ? "Datos en vivo desde Supabase (policies + commissions)." : err ? `No se pudo leer reportes: ${err}` : "Rendimiento consolidado de la operación y de tus aseguradoras."} right={<PrimaryButton icon={RefreshCw}>Actualizar</PrimaryButton>} />
+      <PageHeader title="Centro Financiero de Inteligencia" subtitle={live ? "Datos en vivo desde Supabase (policies + commissions)." : err ? `No se pudo leer reportes: ${err}` : "Rendimiento consolidado de la operación y de tus aseguradoras."} right={<PrimaryButton icon={RefreshCw} onClick={() => setReloadTick((t) => t + 1)}>Actualizar</PrimaryButton>} />
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
         <div className="space-y-5 md:col-span-8">
           <Card title="Rendimiento Financiero y Crecimiento" icon={TrendingUp}>
@@ -1059,10 +1453,14 @@ function ReportesPage() {
   );
 }
 
-function TablePage({ title, subtitle, columns, rows, badgeCol }) {
+// `onAdd` es opcional a propósito: si una tabla no tiene forma real de crear
+// registros desde el panel (cobranzas y comisiones las genera n8n al emitir una
+// póliza), no se pinta un botón que no haría nada.
+function TablePage({ title, subtitle, columns, rows, badgeCol, onAdd, addLabel = "Añadir", note }) {
   return (
     <div>
-      <PageHeader title={title} subtitle={subtitle} right={<PrimaryButton icon={Plus}>Añadir</PrimaryButton>} />
+      <PageHeader title={title} subtitle={subtitle} right={onAdd ? <PrimaryButton icon={Plus} onClick={onAdd}>{addLabel}</PrimaryButton> : null} />
+      {note && <p className="mb-3 text-xs text-slate-400">{note}</p>}
       {rows.length === 0 ? (
         <EmptyState title="Sin registros todavía" subtitle="Esta tabla se llenará con datos reales en cuanto existan en la base de datos." />
       ) : (
@@ -1202,6 +1600,8 @@ function PolizasPage() {
   const [rows, setRows] = useState(POLICIES);
   const [live, setLive] = useState(false);
   const [err, setErr] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -1225,16 +1625,40 @@ function PolizasPage() {
           setLive(true);
         }
       });
-  }, []);
+  }, [reloadTick]);
 
   return (
-    <TablePage
-      title="Pólizas"
-      subtitle={live ? "Datos en vivo desde Supabase (tabla policies)." : err ? `No se pudo leer policies: ${err}` : "Cobertura activa gestionada a través de tus aseguradoras conectadas."}
-      columns={["ID", "Cliente", "Tipo", "Aseguradora", "Prima", "Renovación", "Estado"]}
-      badgeCol="Estado"
-      rows={rows}
-    />
+    <>
+      {showCreate && (
+        <CreateModal
+          title="Emitir Póliza"
+          resource="policy"
+          fields={[
+            { name: "chat_id", label: "Teléfono del cliente (debe existir en Clientes)", placeholder: "584121234567" },
+            { name: "insurer_id", label: "Aseguradora", loadOptions: { table: "insurers", valueCol: "id", labelCol: "name" } },
+            { name: "product_id", label: "Producto", loadOptions: { table: "products", valueCol: "id", labelCol: "name", eq: ["is_active", true] } },
+            { name: "policy_number", label: "Número de póliza (opcional)", placeholder: "Lo asigna la aseguradora" },
+            { name: "premium_total", label: "Prima total", type: "number", placeholder: "0.00" },
+            { name: "currency", label: "Moneda", type: "select", options: ["USD", "VES"], default: "USD" },
+            { name: "payment_frequency", label: "Frecuencia de pago", type: "select", options: ["single", "monthly", "quarterly", "semiannual", "annual"], default: "annual" },
+            { name: "start_date", label: "Inicio de vigencia", type: "date" },
+            { name: "end_date", label: "Fin de vigencia", type: "date" },
+          ]}
+          onClose={() => setShowCreate(false)}
+          onCreated={() => setReloadTick((t) => t + 1)}
+        />
+      )}
+      <TablePage
+        title="Pólizas"
+        subtitle={live ? "Datos en vivo desde Supabase (tabla policies)." : err ? `No se pudo leer policies: ${err}` : "Cobertura activa gestionada a través de tus aseguradoras conectadas."}
+        columns={["ID", "Cliente", "Tipo", "Aseguradora", "Prima", "Renovación", "Estado"]}
+        badgeCol="Estado"
+        rows={rows}
+        onAdd={() => setShowCreate(true)}
+        addLabel="Emitir Póliza"
+        note="Al emitir una póliza, n8n genera automáticamente su calendario de cobros y las comisiones asociadas."
+      />
+    </>
   );
 }
 
@@ -1272,6 +1696,7 @@ function CobranzasPage() {
       columns={["Cliente", "Póliza", "Monto", "Vence", "Estado"]}
       badgeCol="Estado"
       rows={rows}
+      note="Los cobros no se crean a mano: n8n los genera al emitir una póliza, según su frecuencia de pago."
     />
   );
 }
@@ -1348,6 +1773,9 @@ function AseguradorasPage() {
   const [rows, setRows] = useState(INSURERS);
   const [live, setLive] = useState(false);
   const [err, setErr] = useState("");
+  const [saving, setSaving] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [reloadTick, setReloadTick] = useState(0);
   const PALETTE = ["#2563eb", "#0ea5e9", "#6366f1", "#0d9488", "#7c3aed", "#f59e0b", "#ef4444", "#10b981", "#64748b"];
 
   useEffect(() => {
@@ -1363,7 +1791,9 @@ function AseguradorasPage() {
         const activas = own.filter((p) => p.status === "active");
         const ingreso = own.reduce((s, p) => s + Number(p.premium_total || 0), 0);
         return {
+          id: i.id,
           name: i.name,
+          status: i.status,
           polizas: activas.length,
           ingreso,
           comision: Math.round(ingreso * (Number(i.commission_default_pct || 0) / 100)),
@@ -1373,28 +1803,67 @@ function AseguradorasPage() {
       setRows(mapped);
       setLive(true);
     });
-  }, []);
+  }, [reloadTick]);
+
+  // La afiliación se escribe vía n8n (recurso insurer-status de W8), nunca
+  // directo a Supabase. El cotizador (W3) solo consulta las que quedan en
+  // status='active', así que este toggle decide con quién cotiza Nai.
+  async function toggleAfiliacion(ins) {
+    const nuevo = ins.status === "active" ? "pending" : "active";
+    setSaving(ins.id);
+    setAviso("");
+    try {
+      const res = await callAppWebApi("insurer-status", { insurer_id: ins.id, status: nuevo });
+      if (res.ok === false) throw new Error(res.error || "n8n rechazó el cambio");
+      setAviso(`${ins.name}: ${nuevo === "active" ? "afiliación activada — Nai ya cotiza con ella" : "afiliación pausada — Nai deja de cotizar con ella"}.`);
+      setReloadTick((t) => t + 1);
+    } catch (e) {
+      setAviso(`No se pudo actualizar ${ins.name}: ${e.message}`);
+    } finally {
+      setSaving("");
+    }
+  }
+
+  const activas = rows.filter((r) => r.status === "active").length;
 
   return (
     <div>
-      <PageHeader title="Aseguradoras" subtitle={live ? "Datos en vivo desde Supabase (tablas insurers + policies)." : err ? `No se pudo leer insurers: ${err}` : "Compañías conectadas y su rendimiento en la operación."} right={<PrimaryButton icon={Plus}>Conectar Aseguradora</PrimaryButton>} />
+      <PageHeader
+        title="Aseguradoras"
+        subtitle={live ? `${activas} de ${rows.length} con afiliación activa. Nai solo cotiza con las activas.` : err ? `No se pudo leer insurers: ${err}` : "Compañías conectadas y su rendimiento en la operación."}
+      />
+      {aviso && <p className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-inset ring-slate-200">{aviso}</p>}
       {rows.length === 0 ? (
         <EmptyState icon={Building2} title="Sin aseguradoras con actividad" subtitle="Las aseguradoras con pólizas o cotizaciones reales aparecerán aquí con su rendimiento." />
       ) : (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {rows.map((i, idx) => (
-          <Card key={idx}>
+          <Card key={i.id || idx}>
             <div className="flex items-center gap-3">
               <div className="grid h-10 w-10 place-items-center rounded-xl text-white font-semibold" style={{ backgroundColor: i.color }}>{i.name[0]}</div>
-              <div>
-                <p className="text-sm font-semibold text-slate-700">{i.name}</p>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-700">{i.name}</p>
                 <p className="text-xs text-slate-400">{i.polizas} pólizas activas</p>
               </div>
+              {i.status && (
+                <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${i.status === "active" ? "bg-emerald-50 text-emerald-600 ring-emerald-200" : "bg-slate-100 text-slate-500 ring-slate-200"}`}>
+                  {i.status === "active" ? "Afiliada" : "Sin afiliar"}
+                </span>
+              )}
             </div>
             <div className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
               <div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-400">Ingreso</p><p className="font-semibold text-slate-700">${i.ingreso.toLocaleString()}</p></div>
               <div className="rounded-lg bg-slate-50 p-2"><p className="text-slate-400">Comisión</p><p className="font-semibold text-slate-700">${i.comision.toLocaleString()}</p></div>
             </div>
+            {i.id && (
+              <button
+                onClick={() => toggleAfiliacion(i)}
+                disabled={saving === i.id}
+                className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {saving === i.id ? "Guardando…" : i.status === "active" ? "Pausar afiliación" : "Activar afiliación"}
+              </button>
+            )}
           </Card>
         ))}
       </div>
@@ -1441,6 +1910,7 @@ function ComisionesPage() {
       subtitle={live ? "Datos en vivo desde Supabase (tabla commissions)." : err ? `No se pudo leer commissions: ${err}` : "Comisión acumulada y pendiente por aseguradora."}
       columns={["Aseguradora", "Acumulada", "Pendiente", "Tasa"]}
       rows={rows}
+      note="Las comisiones las calcula n8n a partir de las pólizas emitidas y sus cuotas cobradas."
     />
   );
 }
@@ -1559,7 +2029,11 @@ function SystemStatusCard() {
       .select("key, value")
       .in("key", ["mode", "test_allowlist"])
       .then(({ data, error }) => {
-        if (error) { setErr(error.message); return; }
+        if (error) {
+          console.error("[Nairobi OS] settings:", error.message);
+          setErr(error.message);
+          return;
+        }
         const modeRow = data?.find((r) => r.key === "mode");
         const allowRow = data?.find((r) => r.key === "test_allowlist");
         setMode(modeRow?.value ?? "test");
@@ -1591,7 +2065,120 @@ function SystemStatusCard() {
           <span className="text-slate-600">Errores (24h)</span>
           <span className={`text-sm font-semibold ${recentErrors ? "text-red-500" : "text-emerald-600"}`}>{recentErrors ?? "…"}</span>
         </div>
-        {err && <p className="text-[11px] text-red-500">{err}</p>}
+        {/* Nairobi no tiene por qué leer el error crudo de PostgREST: se traduce.
+            El texto técnico queda en la consola para quien tenga que depurarlo. */}
+        {err && (
+          <p className="text-[11px] text-red-500">
+            No se pudo leer el estado. Recarga la página; si sigue igual, avísale a Orchex.
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// Números de familiares y conocidos que Nai debe ignorar por completo. W1 los
+// consulta en el prefiltro, ANTES de llamar al modelo: un número aquí no gasta
+// ni un token, y el texto de esos mensajes se guarda redactado.
+// Lectura directa de Supabase (RLS permite SELECT a authenticated); la
+// escritura pasa por W8, como todo lo demás.
+function NumerosPrivadosCard() {
+  const [numeros, setNumeros] = useState([]);
+  const [nuevo, setNuevo] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [guardando, setGuardando] = useState("");
+  const [err, setErr] = useState("");
+
+  async function cargar() {
+    if (!isSupabaseConfigured) return;
+    setCargando(true);
+    setErr("");
+    try {
+      const { data, error } = await supabase
+        .from("settings").select("value").eq("key", "personal_blocklist").maybeSingle();
+      if (error) throw error;
+      setNumeros(Array.isArray(data?.value) ? data.value : []);
+    } catch (e) {
+      setErr(e.message || "No se pudo leer la lista.");
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  useEffect(() => { cargar(); }, []);
+
+  async function aplicar(action, phone) {
+    setGuardando(phone || "nuevo");
+    setErr("");
+    try {
+      const res = await callAppWebApi("blocklist", { action, phone });
+      // W8 devuelve la lista completa ya normalizada: se pinta el estado real
+      // que quedó guardado, no el que supone el panel.
+      setNumeros(res?.data?.blocklist ?? []);
+      if (action === "add") setNuevo("");
+    } catch (e) {
+      setErr(e.message || "No se pudo guardar.");
+    } finally {
+      setGuardando("");
+    }
+  }
+
+  function formatear(n) {
+    // 584124248369 → 0412 424 8369, que es como Nairobi los tiene en la agenda.
+    const m = /^58(\d{3})(\d{3})(\d{4})$/.exec(n);
+    return m ? `0${m[1]} ${m[2]} ${m[3]}` : n;
+  }
+
+  return (
+    <Card title="Números privados (Nai los ignora)" icon={WifiOff}>
+      <p className="mb-3 text-xs text-slate-500">
+        Familiares y conocidos que escriben por temas personales. Nai no lee ni responde
+        esos chats, y no gasta nada en procesarlos. Escribe el número como lo tienes en
+        la agenda: <code className="rounded bg-slate-100 px-1 py-0.5">0412-4248369</code>.
+      </p>
+
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => { e.preventDefault(); if (nuevo.trim()) aplicar("add", nuevo.trim()); }}
+      >
+        <input
+          value={nuevo}
+          onChange={(e) => setNuevo(e.target.value)}
+          placeholder="0412-4248369"
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400"
+        />
+        <button
+          type="submit"
+          disabled={!nuevo.trim() || guardando === "nuevo"}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {guardando === "nuevo" ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+          Agregar
+        </button>
+      </form>
+
+      {err && <p className="mt-2 text-[11px] text-red-500">{err}</p>}
+
+      <div className="mt-3 space-y-1.5">
+        {cargando && <p className="text-xs text-slate-400">Cargando…</p>}
+        {!cargando && numeros.length === 0 && (
+          <p className="text-xs text-slate-400">
+            La lista está vacía: Nai evalúa todos los números que le escriben.
+          </p>
+        )}
+        {numeros.map((n) => (
+          <div key={n} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+            <span className="font-mono text-sm text-slate-700">{formatear(n)}</span>
+            <button
+              onClick={() => aplicar("remove", n)}
+              disabled={guardando === n}
+              title="Quitar de la lista"
+              className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+            >
+              {guardando === n ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+            </button>
+          </div>
+        ))}
       </div>
     </Card>
   );
@@ -1662,6 +2249,8 @@ function ConfiguracionPage() {
               />
             </div>
           </Card>
+
+          <NumerosPrivadosCard />
 
           <Card title="Flujos de Trabajo Personalizados" icon={Bot}>
             <p className="text-xs text-slate-500">Cada módulo de Nairobi OS despacha eventos al webhook de n8n configurado arriba, siguiendo el esquema <code className="rounded bg-slate-100 px-1 py-0.5">nairobi_os_core_schema_v1</code>. Los flujos sugeridos:</p>
@@ -1740,7 +2329,7 @@ export default function NairobiOS({ session, onSignOut }) {
     <div className="flex h-screen w-full overflow-hidden bg-slate-50 font-sans text-slate-800" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" }}>
       <Sidebar active={active} setActive={setActive} open={sidebarOpen} setOpen={setSidebarOpen} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar title={titleMap[active]} onMenu={() => setSidebarOpen(true)} userEmail={session?.user?.email} onSignOut={onSignOut} />
+        <TopBar title={titleMap[active]} onMenu={() => setSidebarOpen(true)} userEmail={session?.user?.email} onSignOut={onSignOut} onBell={() => setActive("mensajes")} />
         <main className="flex-1 overflow-y-auto p-3 sm:p-6">{pages[active]}</main>
       </div>
     </div>
