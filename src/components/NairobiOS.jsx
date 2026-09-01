@@ -1144,6 +1144,7 @@ function CotizacionesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const [envio, setEnvio] = useState("");
+  const [enviandoKey, setEnviandoKey] = useState(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -1179,20 +1180,24 @@ function CotizacionesPage() {
     setLines(mapped);
   }, [quote]);
 
-  // "Generar Propuesta" manda al cliente, por WhatsApp, la recomendación real
-  // que W3 ya calculó — no genera texto nuevo desde el panel.
-  async function enviarPropuesta() {
+  // Nairobi elige cuál opción ofrecer (D017) — no siempre la de menor precio:
+  // puede convenirle más una con más cobertura por poco más de prima. Por eso
+  // cada fila tiene su propio botón de envío ("elegir esta"), en vez de un
+  // único botón que siempre mande la más barata / la mejor rankeada.
+  async function enviarPropuesta(linea) {
     if (!quote?.contacts?.phone) { setEnvio("Esta cotización no tiene un teléfono asociado."); return; }
-    const mejor = lines[0];
-    if (!mejor) { setEnvio("Todavía no hay ninguna opción con precio para proponer."); return; }
+    const elegida = linea || lines[0];
+    if (!elegida) { setEnvio("Todavía no hay ninguna opción con precio para proponer."); return; }
+    setEnviandoKey(elegida.key);
     setEnvio("Enviando…");
     try {
-      const texto = quote.recommendation
-        || `Hola${quote.contacts?.name ? " " + quote.contacts.name : ""}, te comparto la mejor opción que conseguí para tu ${quote.products?.name || "seguro"}: ${mejor.name} por ${mejor.price} al año. ¿Te la reservo?`;
+      const texto = `Hola${quote.contacts?.name ? " " + quote.contacts.name : ""}, te comparto la opción que elegí para tu ${quote.products?.name || "seguro"}: ${elegida.name} por ${elegida.price} al año, con cobertura de ${elegida.coverage}. ¿Te la reservo?`;
       const res = await callAppWebApi("send-message", { chat_id: quote.contacts.phone, message: texto });
-      setEnvio(res?.ok ? "Propuesta enviada al cliente por WhatsApp." : `No se pudo enviar: ${res?.error || "error de n8n"}`);
+      setEnvio(res?.ok ? `Propuesta de ${elegida.name} enviada al cliente por WhatsApp.` : `No se pudo enviar: ${res?.error || "error de n8n"}`);
     } catch (e) {
       setEnvio(`No se pudo enviar: ${e.message}`);
+    } finally {
+      setEnviandoKey(null);
     }
   }
 
@@ -1208,10 +1213,6 @@ function CotizacionesPage() {
         right={
           <div className="flex gap-2">
             <PrimaryButton icon={Sparkles} onClick={() => setShowCreate(true)}>Nueva Cotización</PrimaryButton>
-            <button onClick={enviarPropuesta} disabled={!lines.length}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">
-              <FileText size={15} /> Generar Propuesta
-            </button>
           </div>
         }
       />
@@ -1252,6 +1253,7 @@ function CotizacionesPage() {
                   <th className="px-4 py-3 font-medium">Comisión</th>
                   <th className="px-4 py-3 font-medium">Puntuación Nai</th>
                   <th className="px-4 py-3 font-medium">Recomendación</th>
+                  <th className="px-4 py-3 font-medium">Elegir</th>
                 </tr>
               </thead>
               <tbody>
@@ -1273,6 +1275,14 @@ function CotizacionesPage() {
                       ) : (
                         <span className="text-xs text-slate-400">{q.rec}</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => enviarPropuesta(q)} disabled={enviandoKey !== null}
+                        title={`Enviar al cliente ${q.name} (${q.price}, cobertura ${q.coverage})`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50">
+                        {enviandoKey === q.key ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                        Elegir esta y enviar
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -1298,16 +1308,18 @@ function CotizacionesPage() {
         </div>
 
         <div className="space-y-4 md:col-span-3">
-          <Card title="Nai Acción Recomendada" icon={Sparkles}>
+          <Card title="Nota interna de Nai (sugerencia, no la decisión)" icon={Sparkles}>
             {quote?.recommendation ? (
               <>
                 <p className="whitespace-pre-line text-xs text-slate-600">{quote.recommendation}</p>
-                <button onClick={enviarPropuesta} className="mt-3 w-full rounded-lg bg-blue-600 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
-                  Enviar esta propuesta al cliente
-                </button>
+                <p className="mt-2 text-[11px] text-slate-400">
+                  Es una sugerencia por relación cobertura/precio, no la elección final — la decisión
+                  es tuya: revisá la tabla (a veces pagar un poco más de prima da mucha más cobertura)
+                  y usá "Elegir esta y enviar" en la fila que prefieras.
+                </p>
               </>
             ) : (
-              <p className="text-xs text-slate-500">Nai todavía no ha dejado una recomendación escrita para esta cotización.</p>
+              <p className="text-xs text-slate-500">Nai todavía no ha dejado una nota para esta cotización.</p>
             )}
           </Card>
           <Card title="Timeline de Cotización" icon={Clock}>
