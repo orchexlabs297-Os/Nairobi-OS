@@ -1169,6 +1169,7 @@ function CotizacionesPage() {
       .filter((l) => l.premium != null)
       .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
       .map((l, i) => ({
+        id: l.id,
         key: String.fromCharCode(65 + i),
         name: l.insurers?.name || "—",
         price: `$${l.premium}`,
@@ -1193,7 +1194,25 @@ function CotizacionesPage() {
     try {
       const texto = `Hola${quote.contacts?.name ? " " + quote.contacts.name : ""}, te comparto la opción que elegí para tu ${quote.products?.name || "seguro"}: ${elegida.name} por ${elegida.price} al año, con cobertura de ${elegida.coverage}. ¿Te la reservo?`;
       const res = await callAppWebApi("send-message", { chat_id: quote.contacts.phone, message: texto });
-      setEnvio(res?.ok ? `Propuesta de ${elegida.name} enviada al cliente por WhatsApp.` : `No se pudo enviar: ${res?.error || "error de n8n"}`);
+      if (res?.ok) {
+        setEnvio(`Propuesta de ${elegida.name} enviada al cliente por WhatsApp.`);
+        // R028: registrar qué opción se eligió y avanzar el estado — antes se
+        // mandaba el WhatsApp pero quotes.best_line_id/status nunca se
+        // actualizaban, así que no quedaba ningún rastro de la decisión.
+        if (elegida.id) {
+          const { error: updateError } = await supabase
+            .from("quotes")
+            .update({ best_line_id: elegida.id, status: "sent" })
+            .eq("id", quote.id);
+          if (updateError) {
+            setEnvio(`Propuesta enviada, pero no se pudo registrar la elección: ${updateError.message}`);
+          } else {
+            setQuote((prev) => (prev ? { ...prev, best_line_id: elegida.id, status: "sent" } : prev));
+          }
+        }
+      } else {
+        setEnvio(`No se pudo enviar: ${res?.error || "error de n8n"}`);
+      }
     } catch (e) {
       setEnvio(`No se pudo enviar: ${e.message}`);
     } finally {
@@ -1683,7 +1702,11 @@ function CobranzasPage() {
     if (!isSupabaseConfigured) return;
     supabase
       .from("payments")
+      // R029: filtrar por status pendiente/vencido -- sin esto, pagos ya
+      // saldados (paid/waived) con due_date antiguo ordenaban primero y
+      // podían desplazar a los realmente pendientes fuera del limit(50).
       .select("id, amount, currency, due_date, status, contacts(name, phone), policies(policy_number)")
+      .in("status", ["pending", "overdue"])
       .order("due_date", { ascending: true })
       .limit(50)
       .then(({ data, error }) => {
@@ -1693,7 +1716,13 @@ function CobranzasPage() {
             cliente: p.contacts?.name || p.contacts?.phone || "—",
             poliza: p.policies?.policy_number || "—",
             monto: `$${p.amount} ${p.currency}`,
-            vence: p.due_date ? new Date(p.due_date).toLocaleDateString() : "—",
+            // R029: due_date es un `date` puro (sin hora) -- new Date("2026-09-05")
+            // lo parsea como medianoche UTC, y toLocaleDateString() lo muestra
+            // en la timezone local del navegador, mostrando un día antes en
+            // cualquier timezone detrás de UTC (el sistema corre en
+            // America/Caracas, UTC-4). Se fuerza mediodía UTC para que ningún
+            // offset de timezone razonable pueda cruzar al día anterior/siguiente.
+            vence: p.due_date ? new Date(`${p.due_date}T12:00:00Z`).toLocaleDateString() : "—",
             estado: PAYMENT_STATUS_LABEL[p.status] || p.status,
           })));
           setLive(true);
@@ -1902,14 +1931,20 @@ function ComisionesPage() {
             const name = c.insurers?.name || "—";
             if (!byInsurer[name]) byInsurer[name] = { aseguradora: name, acumulada: 0, pendiente: 0, count: 0 };
             byInsurer[name].count += 1;
+            // R030: "cancelled" es dinero que nunca se va a cobrar (ej. póliza
+            // anulada) -- antes caía en "pendiente" junto con accrued/invoiced,
+            // inflando el número con comisiones que no existen de verdad.
             if (c.status === "collected") byInsurer[name].acumulada += Number(c.net_amount || 0);
-            else byInsurer[name].pendiente += Number(c.net_amount || 0);
+            else if (c.status !== "cancelled") byInsurer[name].pendiente += Number(c.net_amount || 0);
           }
           setRows(Object.values(byInsurer).map((r) => ({
             aseguradora: r.aseguradora,
             acumulada: `$${r.acumulada.toLocaleString()}`,
             pendiente: `$${r.pendiente.toLocaleString()}`,
-            tasa: `${r.count} comisión(es)`,
+            // R030: esto es un conteo de registros, no una tasa/porcentaje --
+            // la columna se llama "Cotizaciones" ahora en vez de "Tasa" para
+            // que el dato coincida con la etiqueta.
+            cotizaciones: `${r.count} comisión(es)`,
           })));
           setLive(true);
         }
@@ -1920,7 +1955,7 @@ function ComisionesPage() {
     <TablePage
       title="Comisiones"
       subtitle={live ? "Datos en vivo desde Supabase (tabla commissions)." : err ? `No se pudo leer commissions: ${err}` : "Comisión acumulada y pendiente por aseguradora."}
-      columns={["Aseguradora", "Acumulada", "Pendiente", "Tasa"]}
+      columns={["Aseguradora", "Acumulada", "Pendiente", "Cotizaciones"]}
       rows={rows}
       note="Las comisiones las calcula n8n a partir de las pólizas emitidas y sus cuotas cobradas."
     />
