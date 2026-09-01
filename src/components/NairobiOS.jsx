@@ -1199,15 +1199,17 @@ function CotizacionesPage() {
         // R028: registrar qué opción se eligió y avanzar el estado — antes se
         // mandaba el WhatsApp pero quotes.best_line_id/status nunca se
         // actualizaban, así que no quedaba ningún rastro de la decisión.
+        // Va por un resource de W8 (mismo patrón que send-message/bot-toggle),
+        // no un .update() directo de Supabase: RLS en quotes (y en todas las
+        // tablas del panel salvo documents) solo tiene policy de SELECT para
+        // authenticated -- un update directo desde el navegador se "resuelve"
+        // sin error pero no toca ninguna fila (RLS filtra en silencio).
         if (elegida.id) {
-          const { error: updateError } = await supabase
-            .from("quotes")
-            .update({ best_line_id: elegida.id, status: "sent" })
-            .eq("id", quote.id);
-          if (updateError) {
-            setEnvio(`Propuesta enviada, pero no se pudo registrar la elección: ${updateError.message}`);
-          } else {
+          try {
+            await callAppWebApi("quote-choose-line", { quote_id: quote.id, line_id: elegida.id });
             setQuote((prev) => (prev ? { ...prev, best_line_id: elegida.id, status: "sent" } : prev));
+          } catch (e) {
+            setEnvio(`Propuesta enviada, pero no se pudo registrar la elección: ${e.message}`);
           }
         }
       } else {
@@ -2243,24 +2245,29 @@ function ConfiguracionPage() {
   // El panel nunca escribe directo a Supabase (arquitectura: n8n = único
   // escritor vía service_role). "Guardar" despacha un evento al webhook
   // de n8n configurado arriba; es n8n quien debe persistir el cambio.
+  //
+  // R033: esto posteaba con fetch() directo a `n8nUrl` (la URL BASE del
+  // webhook de n8n, la misma que usa callAppWebApi como prefijo) en vez de
+  // a `${n8nUrl}/config-update` -- el path real registrado en W8 -- y sin
+  // el header x-app-web-secret que ese webhook exige (authentication:
+  // headerAuth). Ningún click en "Guardar Configuración" pudo haber
+  // llegado nunca a integration_settings; fallaba con 404/401 en silencio
+  // (solo se veía "Error" genérico, sin detalle). Se corrige reusando
+  // callAppWebApi, mismo patrón que el resto del panel.
   async function handleGuardar() {
     if (!n8nUrl) { setSaveStatus("error"); return; }
     setSaveStatus("loading");
     try {
-      const res = await fetch(n8nUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "nairobi_os_config_update",
-          source: "Nairobi OS Panel",
-          timestamp: new Date().toISOString(),
-          payload: {
-            whatsapp: { provider: waapiProvider, token: waapiKey ? "••• (enviado)" : null },
-            google_calendar: { calendar_id: calendarId || null },
-          },
-        }),
+      await callAppWebApi("config-update", {
+        event: "nairobi_os_config_update",
+        source: "Nairobi OS Panel",
+        timestamp: new Date().toISOString(),
+        payload: {
+          whatsapp: { provider: waapiProvider, token: waapiKey ? "••• (enviado)" : null },
+          google_calendar: { calendar_id: calendarId || null },
+        },
       });
-      setSaveStatus(res.ok ? "success" : "error");
+      setSaveStatus("success");
     } catch (e) {
       setSaveStatus("error");
     }
