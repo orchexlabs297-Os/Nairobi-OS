@@ -6,13 +6,14 @@ import {
   Send, Paperclip, Smile, MoreVertical, ChevronRight, Plus, Filter, X,
   Link2, Zap, KeyRound, Save, RefreshCw, Star, Flag, ArrowUpRight,
   ArrowDownRight, ListFilter, Wifi, WifiOff, Loader2, Check, MapPin,
-  FileCheck2, CircleDot, User as UserIcon, Menu, LogOut
+  FileCheck2, CircleDot, User as UserIcon, Menu, LogOut, HelpCircle, ChevronDown
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, AreaChart, Area
 } from "recharts";
 import { supabase, isSupabaseConfigured } from "../lib/supabaseClient.js";
+import { HELP_SECTIONS } from "../data/helpContent.js";
 
 /* ---------------------------------- DATA ---------------------------------- */
 
@@ -29,6 +30,7 @@ const NAV = [
   { id: "comisiones", label: "Comisiones", icon: Percent },
   { id: "reportes", label: "Reportes", icon: BarChart3 },
   { id: "configuracion", label: "Configuración", icon: Settings },
+  { id: "ayuda", label: "Ayuda", icon: HelpCircle },
 ];
 
 // Nota: la plataforma no contiene datos de ejemplo/ficticios. Estas listas
@@ -2233,6 +2235,75 @@ function NumerosPrivadosCard() {
   );
 }
 
+function HelpAccordionItem({ section, open, onToggle }) {
+  return (
+    <div className="border-b border-slate-100 last:border-b-0">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-3 py-3.5 text-left"
+      >
+        <span className="text-sm font-medium text-slate-700">{section.title}</span>
+        <ChevronDown
+          size={16}
+          className={`shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="space-y-3 pb-4 text-sm leading-relaxed text-slate-600">
+          {section.blocks.map((b, i) => {
+            if (b.type === "list") {
+              return (
+                <ul key={i} className="list-disc space-y-1 pl-5">
+                  {b.items.map((it, j) => <li key={j}>{it}</li>)}
+                </ul>
+              );
+            }
+            if (b.type === "image") {
+              if (!b.src) return null;
+              return (
+                <img
+                  key={i}
+                  src={b.src}
+                  alt={b.alt || ""}
+                  className="max-w-full rounded-lg ring-1 ring-slate-200"
+                />
+              );
+            }
+            return <p key={i}>{b.text}</p>;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AyudaPage() {
+  // Todas cerradas por defecto salvo la Introducción, para que quien recién
+  // entra vea de una qué es esto sin tener que abrir nada.
+  const [openId, setOpenId] = useState("intro");
+
+  return (
+    <div>
+      <PageHeader
+        title="Ayuda"
+        subtitle="Manual de uso de Nairobi OS -- qué hace cada pantalla y cómo usarla."
+      />
+      <Card>
+        <div className="divide-y divide-slate-100">
+          {HELP_SECTIONS.map((section) => (
+            <HelpAccordionItem
+              key={section.id}
+              section={section}
+              open={openId === section.id}
+              onToggle={() => setOpenId(openId === section.id ? null : section.id)}
+            />
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function ConfiguracionPage() {
   const [n8nUrl, setN8nUrl] = useState(import.meta.env.VITE_N8N_APP_WEB_URL || "");
   const [waapiProvider, setWaapiProvider] = useState("evolution_api");
@@ -2377,6 +2448,7 @@ export default function NairobiOS({ session, onSignOut }) {
     aseguradoras: <AseguradorasPage />,
     comisiones: <ComisionesPage />,
     configuracion: <ConfiguracionPage />,
+    ayuda: <AyudaPage />,
   };
 
   return (
