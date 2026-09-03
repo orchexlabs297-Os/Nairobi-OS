@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Home, Users, FileText, ShieldCheck, AlertTriangle, DollarSign, Calendar,
   MessageSquare, Building2, Percent, BarChart3, Settings, Bell,
@@ -210,7 +210,14 @@ function Toggle({ on, onClick, label }) {
 
 /* ---------------------------------- SHELL ---------------------------------- */
 
-function Sidebar({ active, setActive, open, setOpen }) {
+// Rediseño aprobado por Sebastián 2026-09-03 (docs/rediseno_panel_2026-09,
+// mockup v2): rail de vidrio sobre navy, colapsable a solo íconos en desktop
+// -- "que los íconos de las funciones se puedan ocultar, así como se oculta
+// tu propio panel de historial de sesiones". En mobile se mantiene el cajón
+// deslizable de siempre, sin colapso (Sebastián pidió el colapso "al menos
+// en la laptop", no para el teléfono, que ya se resuelve ocultando el rail
+// entero con el botón de menú existente).
+function Sidebar({ active, setActive, open, setOpen, collapsed, setCollapsed }) {
   return (
     <>
       {open && (
@@ -220,23 +227,32 @@ function Sidebar({ active, setActive, open, setOpen }) {
         />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex h-full w-64 shrink-0 -translate-x-full flex-col border-r border-slate-200/80 bg-white transition-transform duration-200 md:static md:z-auto md:w-60 md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex h-full shrink-0 -translate-x-full flex-col overflow-hidden rounded-none bg-gradient-to-b from-navy-900 to-navy-950 text-[#DCE8F5] shadow-xl transition-[transform,width] duration-200 md:relative md:inset-y-auto md:z-auto md:my-3 md:ml-3 md:h-[calc(100%-1.5rem)] md:translate-x-0 md:rounded-3xl ${
           open ? "translate-x-0" : ""
-        }`}
+        } ${collapsed ? "w-64 md:w-[74px]" : "w-64 md:w-60"}`}
       >
-        <div className="flex items-center justify-between px-5 py-5">
-          <div className="flex items-center gap-2.5">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-bold text-sm shadow-sm">N</div>
-            <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Centro Administrativo</p>
-              <p className="-mt-0.5 text-[15px] font-semibold text-slate-800">Nairobi</p>
-            </div>
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          title={collapsed ? "Mostrar nombres del menú" : "Ocultar nombres del menú"}
+          className={`absolute top-6 z-10 hidden h-6 w-6 items-center justify-center rounded-full bg-white text-navy-900 shadow-md ring-1 ring-slate-200 transition-transform duration-200 md:flex ${
+            collapsed ? "right-[-11px] rotate-180" : "right-[-11px]"
+          }`}
+        >
+          <ChevronRight size={13} className="rotate-180" />
+        </button>
+
+        <div className={`flex items-center gap-2.5 px-5 py-5 ${collapsed ? "md:justify-center md:px-0" : ""}`}>
+          <img src="/branding/logo_nairobi_montilla.png" alt="Nairobi Montilla" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
+          <div className={`min-w-0 ${collapsed ? "md:hidden" : ""}`}>
+            <p className="text-[9.5px] font-semibold uppercase leading-tight tracking-wide text-[#9FC1E5]">Centro Administrativo</p>
+            <p className="-mt-0.5 font-display text-[16px] font-semibold text-white">Nairobi</p>
           </div>
-          <button onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-50 md:hidden">
+          <button onClick={() => setOpen(false)} className="ml-auto rounded-lg p-1.5 text-[#9FC1E5] hover:bg-white/10 md:hidden">
             <X size={18} />
           </button>
         </div>
-        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">
+
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-3 pb-4">
           {NAV.map((item) => {
             const Icon = item.icon;
             const isActive = active === item.id;
@@ -244,21 +260,24 @@ function Sidebar({ active, setActive, open, setOpen }) {
               <button
                 key={item.id}
                 onClick={() => { setActive(item.id); setOpen(false); }}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${
-                  isActive ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                title={item.label}
+                className={`flex w-full items-center gap-2.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm transition ${collapsed ? "md:justify-center md:px-0" : ""} ${
+                  isActive ? "bg-white/15 font-medium text-white ring-1 ring-inset ring-white/15" : "text-[#B9CEE3] hover:bg-white/8 hover:text-white"
                 }`}
               >
-                <Icon size={16.5} strokeWidth={isActive ? 2.4 : 2} />
-                {item.label}
+                <Icon size={16.5} strokeWidth={isActive ? 2.4 : 2} className="shrink-0" />
+                <span className={collapsed ? "md:hidden" : ""}>{item.label}</span>
               </button>
             );
           })}
         </nav>
-        <div className="mx-3 mb-4 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200/70">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-            <Bot size={14} className="text-indigo-500" /> Nai Agente
+
+        <div className={`mx-3 mb-4 flex items-center gap-2.5 rounded-2xl bg-white/8 p-3 ring-1 ring-white/10 ${collapsed ? "md:justify-center md:px-2" : ""}`}>
+          <span className="relative h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,.25)]" />
+          <div className={collapsed ? "md:hidden" : ""}>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-white"><Bot size={13} /> Nai Agente</div>
+            <p className="mt-0.5 text-[11px] leading-snug text-[#9FC1E5]">Supervisando flujos vía n8n.</p>
           </div>
-          <p className="mt-1 text-[11px] leading-snug text-slate-400">Supervisando flujos vía n8n.</p>
         </div>
       </aside>
     </>
@@ -398,10 +417,42 @@ function InicioPage({ setActive }) {
   const n = (v) => (d ? v : "…");
   return (
     <div>
-      <PageHeader
-        title="Buenos días, Nairobi."
-        subtitle={err ? `No se pudo cargar el resumen: ${err}` : "Tienes el control total de tu operación."}
-      />
+      {/* Hero fotográfico -- rediseño aprobado por Sebastián 2026-09-03
+          (docs/rediseno_panel_2026-09). Reemplaza el PageHeader plano solo en
+          Inicio; el resto de las páginas no cambió (fuera del alcance
+          aprobado, que cubrió Inicio + Mensajes nada más). */}
+      <div className="relative mb-5 overflow-hidden rounded-3xl shadow-lg">
+        <img src="/design/hero-inicio.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-r from-navy-950/90 via-navy-950/55 to-navy-900/10" />
+        <div className="relative flex flex-col gap-6 p-6 sm:p-8">
+          <div>
+            <span className="inline-flex items-center rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sky-100 backdrop-blur">
+              Buenos días, Nairobi
+            </span>
+            <h1 className="mt-3 font-display text-[28px] font-medium leading-tight text-white sm:text-[34px]">
+              Tienes el control total<br />de tu operación.
+            </h1>
+            {err && <p className="mt-2 text-sm text-red-200">No se pudo cargar el resumen: {err}</p>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { l: "citas hoy", v: n(d?.citasHoy.length ?? 0), Icon: Calendar, go: "citas" },
+              { l: "siniestros abiertos", v: n(d?.claimsAbiertos ?? 0), Icon: AlertTriangle, go: "siniestros" },
+              { l: "pagos próximos", v: n(d?.pagosProximos ?? 0), Icon: DollarSign, go: "cobranzas" },
+              { l: "cotizaciones nuevas", v: n(d?.quotesNuevas ?? 0), Icon: FileText, go: "cotizaciones" },
+            ].map((k) => (
+              <button
+                key={k.l}
+                onClick={() => setActive(k.go)}
+                className="flex items-center gap-2 rounded-full border border-white/20 bg-navy-950/40 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur transition hover:bg-navy-950/60"
+              >
+                <k.Icon size={13} className="opacity-80" />
+                <b className="font-display text-[13px]">{k.v}</b> {k.l}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
       <div className="flex flex-col gap-5 md:grid md:grid-cols-3">
         <div className="space-y-5 md:col-span-2">
           <Card title="Atención Prioritaria" icon={Sparkles} action={<NaiTag>Highlights inteligentes de Nai</NaiTag>}>
@@ -535,6 +586,13 @@ function MensajesPage() {
   const [borrador, setBorrador] = useState("");
   const [enviando, setEnviando] = useState(false);
   const isMobile = useIsMobile();
+  const threadEndRef = useRef(null);
+
+  // Como WhatsApp: al abrir o cambiar de conversación, el hilo arranca
+  // mostrando el mensaje más reciente (abajo), no el más viejo (arriba).
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ block: "end" });
+  }, [selected?.id, selected?.thread?.length]);
 
   // El WhatsApp que alimenta a Nai es un número personal: por él entran también
   // conversaciones privadas (familia, amigos) que no son del negocio. La bandeja
@@ -555,7 +613,15 @@ function MensajesPage() {
       .from("conversations")
       .select("id, status, should_respond, metadata, created_at, contacts(phone, policies(id)), messages(id, message_text, direction, metadata, created_at)")
       .order("created_at", { ascending: false })
-      .order("created_at", { foreignTable: "messages", ascending: true })
+      // Traía el historial COMPLETO de mensajes de cada conversación (sin
+      // límite) en orden ascendente -- lento con conversaciones largas, y
+      // el hilo se mostraba desde el mensaje más viejo en vez del más
+      // reciente (WhatsApp siempre abre en el más reciente). Se pide
+      // descendente + límite (los últimos 50) para acotar la carga, y se
+      // revierte a ascendente en JS antes de armar el thread para que el
+      // orden de lectura de arriba a abajo no cambie.
+      .order("created_at", { foreignTable: "messages", ascending: false })
+      .limit(50, { foreignTable: "messages" })
       .limit(30)
       .then(({ data, error }) => {
         setLoading(false);
@@ -564,7 +630,7 @@ function MensajesPage() {
         const negocio = data.filter(esConversacionDeNegocio);
         setOcultas(data.length - negocio.length);
         const mapped = (verTodas ? data : negocio).map((c) => {
-          const msgs = c.messages || [];
+          const msgs = [...(c.messages || [])].reverse();
           const last = msgs[msgs.length - 1];
           return {
             id: c.id,
@@ -681,13 +747,44 @@ function MensajesPage() {
           </div>
         </div>
 
-        <div className="flex min-h-96 flex-col rounded-2xl bg-white ring-1 ring-slate-200/70 md:col-span-6 md:min-h-0">
-          <div className="flex items-center justify-between border-b border-slate-100 p-4">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">{selected.cliente}</p>
-              <p className="text-xs text-slate-400">{selected.thread.length} mensajes</p>
+        <div className="flex min-h-96 flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200/70 md:col-span-6 md:min-h-0">
+          {/* Header fotográfico -- rediseño aprobado 2026-09-03. Mismo criterio
+              que Inicio: foto real + vidrio, nada inventado abajo (las 3 mini-cards
+              salen de datos que ya trae el thread, no de un dato nuevo fabricado). */}
+          <div className="relative shrink-0 overflow-hidden">
+            <img src="/design/hero-mensajes.jpg" alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-b from-navy-950/85 via-navy-950/55 to-navy-900/90" />
+            <div className="relative flex items-center justify-between p-4">
+              <div>
+                <p className="text-sm font-semibold text-white">{selected.cliente}</p>
+                <p className="flex items-center gap-1.5 text-xs text-sky-100">
+                  <span className={`h-1.5 w-1.5 rounded-full ${selected.should_respond ? "bg-emerald-400" : "bg-amber-400"}`} />
+                  {selected.should_respond ? "Activo" : "Nai en pausa"}
+                </p>
+              </div>
+              <MoreVertical size={16} className="text-white/70" />
             </div>
-            <MoreVertical size={16} className="text-slate-400" />
+            {(() => {
+              const lastClassified = [...selected.thread].reverse().find((m) => m.classification);
+              const cls = lastClassified?.classification;
+              return (
+                <div className="relative -mt-1 grid grid-cols-3 gap-2 px-4 pb-4">
+                  {[
+                    { l: "Confianza", v: cls ? `${Math.round((cls.confidence ?? 0) * 100)}%` : "—", Icon: CheckCircle2 },
+                    { l: "Producto", v: cls?.product || "—", Icon: ShieldCheck },
+                    { l: "Mensajes", v: String(selected.thread.length), Icon: MessageSquare },
+                  ].map((s) => (
+                    <div key={s.l} className="rounded-xl bg-white/95 px-2.5 py-2 text-center shadow-sm backdrop-blur">
+                      <div className="mx-auto mb-1 grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br from-blue-500 to-navy-900 text-white">
+                        <s.Icon size={11} />
+                      </div>
+                      <p className="font-display text-[13px] font-semibold leading-none text-slate-800">{s.v}</p>
+                      <p className="mt-1 text-[8.5px] font-bold uppercase tracking-wide text-slate-400">{s.l}</p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {selected.thread.map((m, i) => (
@@ -705,6 +802,7 @@ function MensajesPage() {
                 )}
               </div>
             ))}
+            <div ref={threadEndRef} />
           </div>
           <div className="border-t border-slate-100 p-3">
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
@@ -1984,21 +2082,6 @@ function IntegrationRow({ label, description, placeholder, value, setValue, secr
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
   const [enabled, setEnabled] = useState(true);
 
-  async function testConnection() {
-    if (!value) { setStatus("error"); return; }
-    setStatus("loading");
-    try {
-      const res = await fetch(value, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "Nairobi OS", test: true, timestamp: new Date().toISOString() }),
-      });
-      setStatus(res.ok ? "success" : "error");
-    } catch (e) {
-      setStatus("error");
-    }
-  }
-
   async function testSupabaseConnection() {
     setStatus("loading");
     try {
@@ -2048,7 +2131,7 @@ function IntegrationRow({ label, description, placeholder, value, setValue, secr
             />
             {testable && (
               <button
-                onClick={label === "Conexión Supabase" ? testSupabaseConnection : testConnection}
+                onClick={testSupabaseConnection}
                 className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
               >
                 {status === "loading" ? <Loader2 size={13} className="animate-spin" /> : status === "success" ? <Check size={13} className="text-emerald-500" /> : status === "error" ? <WifiOff size={13} className="text-red-500" /> : <Wifi size={13} />}
@@ -2352,9 +2435,9 @@ function ConfiguracionPage() {
           <Card title="Automatización e Integraciones" icon={Zap}>
             <div className="space-y-3">
               <IntegrationRow
-                icon={Link2} label="Webhook de n8n" description="Endpoint que recibe y despacha los flujos de trabajo de Nairobi OS. El botón Guardar Configuración envía los cambios de esta página a esta URL."
+                icon={Link2} label="Webhook de n8n" description="Endpoint que recibe y despacha los flujos de trabajo de Nairobi OS. El botón Guardar Configuración envía los cambios de esta página a esta URL. Cada acción del panel (enviar un mensaje, guardar esta configuración) usa un endpoint propio con autenticación -- no hay un endpoint genérico para 'probar' la conexión sin causar un efecto real."
                 placeholder="https://tu-instancia.n8n.cloud/webhook/nairobi-os"
-                value={n8nUrl} setValue={setN8nUrl} testable
+                value={n8nUrl} setValue={setN8nUrl} testable={false}
               />
               <IntegrationRow
                 icon={MessageSquare} label="WhatsApp Business" description="Proveedor activo para envío y recepción de mensajes. El token se envía a n8n al guardar; nunca se lee ni se muestra desde Supabase."
@@ -2432,6 +2515,7 @@ function ConfiguracionPage() {
 export default function NairobiOS({ session, onSignOut }) {
   const [active, setActive] = useState("inicio");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const titleMap = useMemo(() => Object.fromEntries(NAV.map((n) => [n.id, n.label])), []);
 
@@ -2452,8 +2536,12 @@ export default function NairobiOS({ session, onSignOut }) {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-slate-50 font-sans text-slate-800" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" }}>
-      <Sidebar active={active} setActive={setActive} open={sidebarOpen} setOpen={setSidebarOpen} />
+    <div className="flex h-screen w-full overflow-hidden bg-[#EAF3FF] font-sans text-slate-800" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" }}>
+      <Sidebar
+        active={active} setActive={setActive}
+        open={sidebarOpen} setOpen={setSidebarOpen}
+        collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar title={titleMap[active]} onMenu={() => setSidebarOpen(true)} userEmail={session?.user?.email} onSignOut={onSignOut} onBell={() => setActive("mensajes")} />
         <main className="flex-1 overflow-y-auto p-3 sm:p-6">{pages[active]}</main>
