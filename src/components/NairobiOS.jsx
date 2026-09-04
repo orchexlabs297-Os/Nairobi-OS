@@ -175,6 +175,32 @@ function PageHeader({ title, subtitle, right }) {
   );
 }
 
+// Header liviano del rediseño (navy + Fraunces, sin foto) para las 11
+// secciones fuera del alcance aprobado por Sebastián (Inicio + Mensajes, con
+// hero fotográfico -- ver comentario en InicioPage). Criterio acordado con
+// Charles/Magnus 2026-09-04: mismo header en las 11, ninguna foto suelta del
+// mockup entra a producción sin aprobación explícita.
+function SectionHero({ title, subtitle, right, icon: Icon }) {
+  return (
+    <div className="relative mb-5 overflow-hidden rounded-3xl bg-gradient-to-br from-navy-900 to-navy-950 p-6 shadow-lg sm:p-7">
+      <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/5" />
+      <div className="pointer-events-none absolute -bottom-16 right-10 h-48 w-48 rounded-full bg-white/5" />
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          {Icon && (
+            <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-sky-100 ring-1 ring-inset ring-white/15">
+              <Icon size={17} />
+            </div>
+          )}
+          <h1 className="font-display text-[24px] font-medium leading-tight text-white sm:text-[28px]">{title}</h1>
+          {subtitle && <p className="mt-1.5 max-w-xl text-sm text-[#B9CEE3]">{subtitle}</p>}
+        </div>
+        {right && <div className="shrink-0">{right}</div>}
+      </div>
+    </div>
+  );
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth < 768 : false);
   useEffect(() => {
@@ -1039,7 +1065,8 @@ function SiniestrosPage() {
           onCreated={() => setReloadTick((t) => t + 1)}
         />
       )}
-      <PageHeader
+      <SectionHero
+        icon={AlertTriangle}
         title="Centro de Siniestros"
         subtitle={live ? "Datos en vivo desde Supabase (tabla claims)." : "Listado de siniestros (claims list) supervisado por Nai."}
         right={<PrimaryButton icon={Plus} onClick={() => setShowCreate(true)}>Crear Nuevo Siniestro</PrimaryButton>}
@@ -1326,7 +1353,8 @@ function CotizacionesPage() {
   return (
     <div>
       {showCreate && <QuoteCreateModal onClose={() => setShowCreate(false)} onCreated={() => setReloadTick((t) => t + 1)} />}
-      <PageHeader
+      <SectionHero
+        icon={FileText}
         title="Comparador de Cotizaciones Multi-Aseguradora"
         subtitle={live
           ? `${quotes.length} cotización(es) registradas${quote ? ` — viendo la de ${quote.contacts?.name || quote.contacts?.phone || "cliente"} (${QUOTE_STATUS_LABEL[quote.status] || quote.status})` : ""}.`
@@ -1495,7 +1523,7 @@ function ReportesPage() {
 
   return (
     <div>
-      <PageHeader title="Centro Financiero de Inteligencia" subtitle={live ? "Datos en vivo desde Supabase (policies + commissions)." : err ? `No se pudo leer reportes: ${err}` : "Rendimiento consolidado de la operación y de tus aseguradoras."} right={<PrimaryButton icon={RefreshCw} onClick={() => setReloadTick((t) => t + 1)}>Actualizar</PrimaryButton>} />
+      <SectionHero icon={BarChart3} title="Centro Financiero de Inteligencia" subtitle={live ? "Datos en vivo desde Supabase (policies + commissions)." : err ? `No se pudo leer reportes: ${err}` : "Rendimiento consolidado de la operación y de tus aseguradoras."} right={<PrimaryButton icon={RefreshCw} onClick={() => setReloadTick((t) => t + 1)}>Actualizar</PrimaryButton>} />
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
         <div className="space-y-5 md:col-span-8">
           <Card title="Rendimiento Financiero y Crecimiento" icon={TrendingUp}>
@@ -1589,10 +1617,10 @@ function ReportesPage() {
 // `onAdd` es opcional a propósito: si una tabla no tiene forma real de crear
 // registros desde el panel (cobranzas y comisiones las genera n8n al emitir una
 // póliza), no se pinta un botón que no haría nada.
-function TablePage({ title, subtitle, columns, rows, badgeCol, onAdd, addLabel = "Añadir", note }) {
+function TablePage({ title, subtitle, columns, rows, badgeCol, onAdd, addLabel = "Añadir", note, icon }) {
   return (
     <div>
-      <PageHeader title={title} subtitle={subtitle} right={onAdd ? <PrimaryButton icon={Plus} onClick={onAdd}>{addLabel}</PrimaryButton> : null} />
+      <SectionHero icon={icon} title={title} subtitle={subtitle} right={onAdd ? <PrimaryButton icon={Plus} onClick={onAdd}>{addLabel}</PrimaryButton> : null} />
       {note && <p className="mb-3 text-xs text-slate-400">{note}</p>}
       {rows.length === 0 ? (
         <EmptyState title="Sin registros todavía" subtitle="Esta tabla se llenará con datos reales en cuanto existan en la base de datos." />
@@ -1689,7 +1717,8 @@ function ClientesPage() {
           onCreated={() => setReloadTick((t) => t + 1)}
         />
       )}
-      <PageHeader
+      <SectionHero
+        icon={Users}
         title="Clientes"
         subtitle={
           live
@@ -1782,6 +1811,7 @@ function PolizasPage() {
         />
       )}
       <TablePage
+        icon={ShieldCheck}
         title="Pólizas"
         subtitle={live ? "Datos en vivo desde Supabase (tabla policies)." : err ? `No se pudo leer policies: ${err}` : "Cobertura activa gestionada a través de tus aseguradoras conectadas."}
         columns={["ID", "Cliente", "Tipo", "Aseguradora", "Prima", "Renovación", "Estado"]}
@@ -1834,6 +1864,7 @@ function CobranzasPage() {
 
   return (
     <TablePage
+      icon={DollarSign}
       title="Cobranzas"
       subtitle={live ? "Datos en vivo desde Supabase (tabla payments)." : err ? `No se pudo leer payments: ${err}` : "Pagos próximos y vencidos con recordatorios automáticos por WhatsApp."}
       columns={["Cliente", "Póliza", "Monto", "Vence", "Estado"]}
@@ -1890,7 +1921,7 @@ function CitasPage() {
           onCreated={() => setReloadTick((t) => t + 1)}
         />
       )}
-      <PageHeader title="Citas" subtitle={live ? "Datos en vivo desde Supabase (tabla appointments)." : "Agenda sincronizada con Google Calendar vía n8n."} right={<PrimaryButton icon={Plus} onClick={() => setShowCreate(true)}>Nueva Cita</PrimaryButton>} />
+      <SectionHero icon={Calendar} title="Citas" subtitle={live ? "Datos en vivo desde Supabase (tabla appointments)." : "Agenda sincronizada con Google Calendar vía n8n."} right={<PrimaryButton icon={Plus} onClick={() => setShowCreate(true)}>Nueva Cita</PrimaryButton>} />
       {err && <p className="mb-3 text-xs text-red-500">No se pudo leer appointments: {err}</p>}
       {rows.length === 0 ? (
         <EmptyState icon={Calendar} title="Sin citas agendadas" subtitle="Las citas sincronizadas desde Google Calendar aparecerán aquí." />
@@ -1971,7 +2002,8 @@ function AseguradorasPage() {
 
   return (
     <div>
-      <PageHeader
+      <SectionHero
+        icon={Building2}
         title="Aseguradoras"
         subtitle={live ? `${activas} de ${rows.length} con afiliación activa. Nai solo cotiza con las activas.` : err ? `No se pudo leer insurers: ${err}` : "Compañías conectadas y su rendimiento en la operación."}
       />
@@ -2055,6 +2087,7 @@ function ComisionesPage() {
 
   return (
     <TablePage
+      icon={Percent}
       title="Comisiones"
       subtitle={live ? "Datos en vivo desde Supabase (tabla commissions)." : err ? `No se pudo leer commissions: ${err}` : "Comisión acumulada y pendiente por aseguradora."}
       columns={["Aseguradora", "Acumulada", "Pendiente", "Cotizaciones"]}
@@ -2367,7 +2400,8 @@ function AyudaPage() {
 
   return (
     <div>
-      <PageHeader
+      <SectionHero
+        icon={HelpCircle}
         title="Ayuda"
         subtitle="Manual de uso de Nairobi OS -- qué hace cada pantalla y cómo usarla."
       />
@@ -2429,7 +2463,7 @@ function ConfiguracionPage() {
 
   return (
     <div>
-      <PageHeader title="Configuración" subtitle="Conecta Nairobi OS con n8n, WhatsApp, Supabase y APIs externas." />
+      <SectionHero icon={Settings} title="Configuración" subtitle="Conecta Nairobi OS con n8n, WhatsApp, Supabase y APIs externas." />
       <div className="flex flex-col gap-5 md:grid md:grid-cols-12">
         <div className="space-y-5 md:col-span-8">
           <Card title="Automatización e Integraciones" icon={Zap}>
