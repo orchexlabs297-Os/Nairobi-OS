@@ -278,7 +278,7 @@ function Sidebar({ active, setActive, open, setOpen, collapsed, setCollapsed }) 
           </button>
         </div>
 
-        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-3 pb-4">
+        <nav className="scrollbar-none min-h-0 flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden px-3 pb-4">
           {NAV.map((item) => {
             const Icon = item.icon;
             const isActive = active === item.id;
@@ -297,14 +297,6 @@ function Sidebar({ active, setActive, open, setOpen, collapsed, setCollapsed }) 
             );
           })}
         </nav>
-
-        <div className={`mx-3 mb-4 flex items-center gap-2.5 rounded-2xl bg-white/8 p-3 ring-1 ring-white/10 ${collapsed ? "md:justify-center md:px-2" : ""}`}>
-          <span className="relative h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,.25)]" />
-          <div className={collapsed ? "md:hidden" : ""}>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-white"><Bot size={13} /> Nai Agente</div>
-            <p className="mt-0.5 text-[11px] leading-snug text-[#9FC1E5]">Supervisando flujos vía n8n.</p>
-          </div>
-        </div>
       </aside>
     </>
   );
@@ -373,6 +365,19 @@ const QUOTE_CERRADA = ["accepted", "rejected", "expired"];
 function InicioPage({ setActive }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
+  const [resolvingId, setResolvingId] = useState(null);
+
+  async function resolverEscalacion(escalationId) {
+    setResolvingId(escalationId);
+    try {
+      const res = await callAppWebApi("resolve-escalation", { escalation_id: escalationId });
+      if (res?.ok) {
+        setD((prev) => (prev ? { ...prev, alerts: prev.alerts.filter((a) => a.id !== escalationId) } : prev));
+      }
+    } finally {
+      setResolvingId(null);
+    }
+  }
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -408,7 +413,7 @@ function InicioPage({ setActive }) {
       // Atención prioritaria: se arma solo con hechos reales de la base.
       const alerts = [];
       for (const e of es.slice(0, 3)) {
-        alerts.push({ icon: Flag, tone: "bg-red-50 text-red-600",
+        alerts.push({ id: e.id, icon: Flag, tone: "bg-red-50 text-red-600",
           text: `Escalación pendiente de ${e.contacts?.name || e.contacts?.phone || "un cliente"}: ${e.reason || "sin motivo registrado"}.`, go: "mensajes" });
       }
       for (const x of c.filter((x) => ["severe", "fatal"].includes(x.severity) && CLAIM_ABIERTO.includes(x.status)).slice(0, 3)) {
@@ -489,17 +494,31 @@ function InicioPage({ setActive }) {
                 {alerts.map((a, i) => {
                   const Icon = a.icon;
                   return (
-                    <button
+                    <div
                       key={i}
-                      onClick={() => a.go && setActive(a.go)}
-                      className="flex w-full items-start gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:bg-slate-50"
+                      className="flex w-full items-start gap-3 rounded-xl border border-slate-100 p-3 transition hover:bg-slate-50"
                     >
-                      <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${a.tone}`}>
-                        <Icon size={15} />
-                      </div>
-                      <p className="pt-1 text-sm text-slate-600">{a.text}</p>
-                      <ChevronRight size={15} className="ml-auto mt-1.5 shrink-0 text-slate-300" />
-                    </button>
+                      <button
+                        onClick={() => a.go && setActive(a.go)}
+                        className="flex flex-1 items-start gap-3 text-left"
+                      >
+                        <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${a.tone}`}>
+                          <Icon size={15} />
+                        </div>
+                        <p className="pt-1 text-sm text-slate-600">{a.text}</p>
+                      </button>
+                      {a.id ? (
+                        <button
+                          onClick={() => resolverEscalacion(a.id)}
+                          disabled={resolvingId === a.id}
+                          className="mt-1 shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50"
+                        >
+                          {resolvingId === a.id ? <Loader2 size={13} className="animate-spin" /> : "Resolver"}
+                        </button>
+                      ) : (
+                        <ChevronRight size={15} className="ml-auto mt-1.5 shrink-0 text-slate-300" />
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -1226,12 +1245,12 @@ function QuoteCreateModal({ onClose, onCreated }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">Nueva Cotización</h3>
+          <h3 className="text-sm font-semibold text-slate-800">Cotización rápida</h3>
           <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-50"><X size={16} /></button>
         </div>
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Teléfono del cliente (debe existir en Clientes)</label>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Teléfono del cliente (opcional — dejalo vacío para una cotización rápida sin cliente asociado)</label>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="584121234567"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
           </div>
@@ -1250,7 +1269,7 @@ function QuoteCreateModal({ onClose, onCreated }) {
             </div>
           ))}
         </div>
-        <button onClick={submit} disabled={status === "loading" || !phone || !code}
+        <button onClick={submit} disabled={status === "loading" || !code}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
           {status === "loading" ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
           Cotizar
@@ -1361,7 +1380,7 @@ function CotizacionesPage() {
           : "Compara precios y comisiones entre tus aseguradoras conectadas."}
         right={
           <div className="flex gap-2">
-            <PrimaryButton icon={Sparkles} onClick={() => setShowCreate(true)}>Nueva Cotización</PrimaryButton>
+            <PrimaryButton icon={Sparkles} onClick={() => setShowCreate(true)}>Cotización rápida</PrimaryButton>
           </div>
         }
       />
