@@ -22,7 +22,7 @@
 --
 -- MODELO DE ACCESO (el mismo que ya usa el proyecto)
 --   n8n           = service_role → escribe
---   panel de Nai  = authenticated → lee, y ADEMÁS sube (Nairobi carga documentos
+--   panel de Noe  = authenticated → lee, y ADEMÁS sube (Nairobi carga documentos
 --                   a mano; si no puede, la plataforma no sirve para su trabajo)
 --   anónimo       = nada
 -- ============================================================================

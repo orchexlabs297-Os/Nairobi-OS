@@ -1,6 +1,6 @@
 # Nairobi OS — Centro Administrativo
 
-Panel administrativo privado para tu agencia de seguros, con Nai (agente IA),
+Panel administrativo privado para tu agencia de seguros, con Noe (agente IA),
 comparador de cotizaciones, siniestros, cobranzas y mensajería, listo para
 conectarse a tu proyecto de Supabase (`bvuotcicefdjirgrxgfp`) y a tus flujos
 de n8n / WaAPI.

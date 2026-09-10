@@ -18,13 +18,13 @@ export const HELP_SECTIONS = [
     id: "intro",
     title: "Introducción",
     blocks: [
-      { type: "p", text: "Nairobi OS es el panel donde ves y controlas todo lo que hace Nai (el asistente de WhatsApp) con tus clientes. Cada conversación, cotización, póliza, siniestro y cobro que pasa por WhatsApp queda reflejado acá." },
+      { type: "p", text: "Nairobi OS es el panel donde ves y controlas todo lo que hace Noe (el asistente de WhatsApp) con tus clientes. Cada conversación, cotización, póliza, siniestro y cobro que pasa por WhatsApp queda reflejado acá." },
       { type: "p", text: "Para entrar: usá el usuario y contraseña que te dieron. Si algún día no entrás, avisale a Sebastián en vez de intentar recuperarla vos misma." },
       { type: "p", text: "Una idea que vas a ver repetida en varias secciones: el interruptor \"Automatizado / Manual\" en cada conversación." },
       { type: "list", items: [
-        "Automatizado: Nai le contesta sola al cliente en esa conversación.",
-        "Manual: Nai se queda callada en esa conversación y contestás vos. Nai no vuelve a meterse ahí hasta que lo pongas en Automatizado de nuevo, o hasta que pase un rato prudencial sin que uses el manual.",
-        "Usalo cada vez que quieras hablar vos misma con un cliente sin que Nai se cruce en el medio, por ejemplo en una negociación especial o una queja delicada.",
+        "Automatizado: Noe le contesta sola al cliente en esa conversación.",
+        "Manual: Noe se queda callada en esa conversación y contestás vos. Noe no vuelve a meterse ahí hasta que lo pongas en Automatizado de nuevo, o hasta que pase un rato prudencial sin que uses el manual.",
+        "Usalo cada vez que quieras hablar vos misma con un cliente sin que Noe se cruce en el medio, por ejemplo en una negociación especial o una queja delicada.",
       ] },
     ],
   },
@@ -37,7 +37,7 @@ export const HELP_SECTIONS = [
       { type: "list", items: [
         "Siniestros nuevos que un cliente reportó y todavía nadie revisó.",
         "Cobranzas vencidas (clientes que debían pagar y no pagaron).",
-        "Documentos o cotizaciones que quedaron \"pendiente manual\" — Nai no pudo resolverlos sola y necesitan que los mires vos.",
+        "Documentos o cotizaciones que quedaron \"pendiente manual\" — Noe no pudo resolverlos sola y necesitan que los mires vos.",
       ] },
       { type: "p", text: "Si Inicio está vacío o sin alertas, no significa que no haya actividad — significa que no hay nada urgente pendiente de tu parte en este momento." },
       { type: "image", src: "/help/inicio.png", alt: "Pantalla de Inicio de Nairobi OS" },
@@ -57,8 +57,8 @@ export const HELP_SECTIONS = [
     id: "cotizaciones",
     title: "Cotizaciones",
     blocks: [
-      { type: "p", text: "Una cotización aparece acá cuando un cliente le pidió un precio a Nai por WhatsApp y Nai comparó las aseguradoras disponibles para ese seguro." },
-      { type: "p", text: "Punto clave, para que quede clarísimo: Nai NUNCA le manda un precio ni una recomendación al cliente por su cuenta. Siempre arma la comparación, te la deja lista acá, y sos vos quien decide qué mandarle." },
+      { type: "p", text: "Una cotización aparece acá cuando un cliente le pidió un precio a Noe por WhatsApp y Noe comparó las aseguradoras disponibles para ese seguro." },
+      { type: "p", text: "Punto clave, para que quede clarísimo: Noe NUNCA le manda un precio ni una recomendación al cliente por su cuenta. Siempre arma la comparación, te la deja lista acá, y sos vos quien decide qué mandarle." },
       { type: "p", text: "Por qué es así: el precio más bajo no siempre es la mejor opción para el cliente. Ejemplo real: una aseguradora puede costar 50$ más que otra, pero cubrir 50.000$ en vez de 10.000$ — eso solo lo evalúa una persona, no un algoritmo que solo mira el número más chico." },
       { type: "p", text: "Cómo se usa: entrá a la cotización, vas a ver todas las opciones de aseguradoras lado a lado (precio y cobertura de cada una). Elegí la fila que te parezca mejor para ese cliente y tocá \"Elegir esta y enviar\" — eso es lo único que hace falta para que el cliente reciba esa opción por WhatsApp. Ninguna otra opción de la lista se le manda." },
       { type: "image", src: "/help/cotizaciones.png", alt: "Comparador de cotizaciones de Nairobi OS" },
@@ -85,7 +85,7 @@ export const HELP_SECTIONS = [
     title: "Siniestros",
     blocks: [
       { type: "p", text: "Un siniestro es cuando un cliente reporta algo que le pasó a lo asegurado: un choque, un robo, un incendio, etc." },
-      { type: "p", text: "La mayoría llegan solos: el cliente se lo cuenta a Nai por WhatsApp y Nai lo registra acá. También podés cargar uno a mano si te enterás por otra vía (una llamada, por ejemplo)." },
+      { type: "p", text: "La mayoría llegan solos: el cliente se lo cuenta a Noe por WhatsApp y Noe lo registra acá. También podés cargar uno a mano si te enterás por otra vía (una llamada, por ejemplo)." },
       { type: "p", text: "Estados que vas a ver:" },
       { type: "list", items: [
         "Nuevo: recién reportado, nadie lo revisó todavía.",
@@ -102,7 +102,7 @@ export const HELP_SECTIONS = [
     id: "cobranzas",
     title: "Cobranzas",
     blocks: [
-      { type: "p", text: "Acá se ven los pagos de las pólizas y los recordatorios que Nai les manda a los clientes cuando se acerca o se pasa la fecha de pago." },
+      { type: "p", text: "Acá se ven los pagos de las pólizas y los recordatorios que Noe les manda a los clientes cuando se acerca o se pasa la fecha de pago." },
       { type: "p", text: "Estados que vas a ver:" },
       { type: "list", items: [
         "Próximo: el pago todavía no vence.",
@@ -127,13 +127,13 @@ export const HELP_SECTIONS = [
     id: "mensajes",
     title: "Mensajes",
     blocks: [
-      { type: "p", text: "Es la vista de todas las conversaciones de WhatsApp que pasan por Nai — tanto las que Nai contesta sola como las que están en manos tuyas." },
+      { type: "p", text: "Es la vista de todas las conversaciones de WhatsApp que pasan por Noe — tanto las que Noe contesta sola como las que están en manos tuyas." },
       { type: "p", text: "Acá es donde más vas a usar el interruptor Automatizado/Manual explicado en la Introducción:" },
       { type: "list", items: [
-        "Ponelo en Manual apenas quieras hablar vos misma con ese cliente sin que Nai conteste en paralelo.",
+        "Ponelo en Manual apenas quieras hablar vos misma con ese cliente sin que Noe conteste en paralelo.",
         "Mientras está en Manual, podés escribirle directo al cliente desde el propio panel — el mensaje sale como si lo mandara Nairobi.",
-        "También queda en Manual automáticamente por un rato después de que le respondas al cliente directo desde tu WhatsApp personal (no solo desde el panel) — así Nai nunca se cruza justo después de que vos ya contestaste.",
-        "Volvé a ponerlo en Automatizado cuando quieras que Nai retome esa conversación.",
+        "También queda en Manual automáticamente por un rato después de que le respondas al cliente directo desde tu WhatsApp personal (no solo desde el panel) — así Noe nunca se cruza justo después de que vos ya contestaste.",
+        "Volvé a ponerlo en Automatizado cuando quieras que Noe retome esa conversación.",
       ] },
       { type: "image", src: "/help/mensajes.png", alt: "Centro de Mensajes de Nairobi OS" },
     ],

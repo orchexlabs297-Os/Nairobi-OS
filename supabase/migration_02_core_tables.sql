@@ -356,7 +356,7 @@ create table if not exists public.n8n_chat_histories (
 );
 create index if not exists ix_n8n_chat_session on public.n8n_chat_histories(session_id, id desc);
 
--- ─── Vista 360 del cliente, para el postgresTool del Agente Nai y para el
+-- ─── Vista 360 del cliente, para el postgresTool del Agente Noe y para el
 -- panel (join contacts + policies reales, no solo el snapshot de 3 columnas)
 create or replace view public.v_cliente_360 as
 select c.id, c.phone, c.name, c.customer_status,

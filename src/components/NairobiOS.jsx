@@ -486,9 +486,9 @@ function InicioPage({ setActive }) {
       </div>
       <div className="flex flex-col gap-5 md:grid md:grid-cols-3">
         <div className="space-y-5 md:col-span-2">
-          <Card title="Atención Prioritaria" icon={Sparkles} action={<NaiTag>Highlights inteligentes de Nai</NaiTag>}>
+          <Card title="Atención Prioritaria" icon={Sparkles} action={<NaiTag>Highlights inteligentes de Noe</NaiTag>}>
             {alerts.length === 0 ? (
-              <EmptyState icon={Sparkles} title="Sin alertas activas" subtitle="Cuando Nai detecte seguimientos, pólizas por vencer o siniestros urgentes, aparecerán aquí." />
+              <EmptyState icon={Sparkles} title="Sin alertas activas" subtitle="Cuando Noe detecte seguimientos, pólizas por vencer o siniestros urgentes, aparecerán aquí." />
             ) : (
               <div className="space-y-2.5">
                 {alerts.map((a, i) => {
@@ -559,10 +559,10 @@ function InicioPage({ setActive }) {
             </div>
           </Card>
 
-          <Card title="Nai Trabaja. Tú Decides." icon={Bot}>
+          <Card title="Noe Trabaja. Tú Decides." icon={Bot}>
             <ul className="space-y-3 text-sm text-slate-600">
               <li className="flex gap-2"><Clock size={15} className="mt-0.5 shrink-0 text-slate-400" />
-                {d ? `${d.mensajes24h} mensaje(s) procesados en las últimas 24 h.` : "Cargando actividad de Nai…"}</li>
+                {d ? `${d.mensajes24h} mensaje(s) procesados en las últimas 24 h.` : "Cargando actividad de Noe…"}</li>
               <li className="flex gap-2"><Link2 size={15} className="mt-0.5 shrink-0 text-indigo-500" />Integraciones: estado real disponible en Configuración.</li>
               <li className="flex gap-2"><Building2 size={15} className="mt-0.5 shrink-0 text-slate-400" />
                 {d ? `${d.asegurActivas} aseguradora(s) activas para cotizar.` : "Consultando aseguradoras…"}</li>
@@ -639,7 +639,7 @@ function MensajesPage() {
     threadEndRef.current?.scrollIntoView({ block: "end" });
   }, [selected?.id, selected?.thread?.length]);
 
-  // El WhatsApp que alimenta a Nai es un número personal: por él entran también
+  // El WhatsApp que alimenta a Noe es un número personal: por él entran también
   // conversaciones privadas (familia, amigos) que no son del negocio. La bandeja
   // solo debe mostrar lo que es trabajo de la corredora — nadie que abra este
   // panel tiene por qué leer los chats personales de nadie.
@@ -744,7 +744,7 @@ function MensajesPage() {
             ? "Bandeja en vivo — sincronizada con Supabase (public.conversations / public.messages)."
             : isSupabaseConfigured
             ? loading ? "Cargando desde Supabase…" : err ? `No se pudo leer conversations: ${err}` : "Sin conversaciones en Supabase todavía."
-            : "Bandeja de entrada unificada de WhatsApp, supervisada por Nai (conecta Supabase en .env)."
+            : "Bandeja de entrada unificada de WhatsApp, supervisada por Noe (conecta Supabase en .env)."
         }
       />
       {ocultas > 0 && (
@@ -784,7 +784,7 @@ function MensajesPage() {
                 <div className="mt-1.5 flex items-center gap-1.5">
                   <StatusBadge status={c.estado} />
                   {!c.should_respond && (
-                    <span className="text-[10px] font-medium text-amber-600">Nai en pausa</span>
+                    <span className="text-[10px] font-medium text-amber-600">Noe en pausa</span>
                   )}
                 </div>
               </button>
@@ -804,7 +804,7 @@ function MensajesPage() {
                 <p className="text-sm font-semibold text-white">{selected.cliente}</p>
                 <p className="flex items-center gap-1.5 text-xs text-sky-100">
                   <span className={`h-1.5 w-1.5 rounded-full ${selected.should_respond ? "bg-emerald-400" : "bg-amber-400"}`} />
-                  {selected.should_respond ? "Activo" : "Nai en pausa"}
+                  {selected.should_respond ? "Activo" : "Noe en pausa"}
                 </p>
               </div>
               <MoreVertical size={16} className="text-white/70" />
@@ -836,7 +836,7 @@ function MensajesPage() {
               <div key={m.id ?? i} className={`flex flex-col ${m.from === "client" ? "items-start" : "items-end"}`}>
                 {m.from === "nai" ? (
                   <div className="max-w-[75%] rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-2 text-sm text-indigo-700">
-                    <div className="mb-1 flex items-center gap-1 text-[11px] font-semibold"><Sparkles size={11} />Nai</div>
+                    <div className="mb-1 flex items-center gap-1 text-[11px] font-semibold"><Sparkles size={11} />Noe</div>
                     {m.text}
                   </div>
                 ) : (
@@ -886,7 +886,7 @@ function MensajesPage() {
               <p className="flex items-center gap-2"><Phone size={13} className="text-slate-400" />{selected.telefono || "—"}</p>
             </div>
           </Card>
-          <Card title="Control de Nai" icon={Zap}>
+          <Card title="Control de Noe" icon={Zap}>
             <div className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-2 text-slate-600">
                 {selected.should_respond ? <Wifi size={14} className="text-emerald-500" /> : <WifiOff size={14} className="text-amber-500" />}
@@ -896,8 +896,8 @@ function MensajesPage() {
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
               {selected.should_respond
-                ? "Nai responde automáticamente en esta conversación."
-                : "Nai está en pausa aquí — solo tú puedes responder hasta que la reactives."}
+                ? "Noe responde automáticamente en esta conversación."
+                : "Noe está en pausa aquí — solo tú puedes responder hasta que la reactives."}
             </p>
             {!N8N_APP_WEB_URL && (
               <p className="mt-2 text-[11px] text-amber-600">VITE_N8N_APP_WEB_URL no está configurado — el toggle no puede llegar a n8n.</p>
@@ -913,8 +913,14 @@ function MensajesPage() {
 // Modal genérico para los formularios "crear X" que hablan con W8. Nunca
 // escribe directo a Supabase — solo hace POST al webhook de n8n
 // correspondiente (misma arquitectura que ConfiguracionPage/MensajesPage).
-function CreateModal({ title, fields, resource, onClose, onCreated }) {
-  const [values, setValues] = useState(Object.fromEntries(fields.map((f) => [f.name, f.default || ""])));
+// `initialValues` precarga el formulario (edición) y viaja tal cual en el
+// payload aunque no tenga un campo visible propio en `fields` — así se manda
+// un id (ej. payment_id) sin pintar un input para él.
+function CreateModal({ title, fields, resource, onClose, onCreated, initialValues, submitLabel, successLabel }) {
+  const [values, setValues] = useState({
+    ...Object.fromEntries(fields.map((f) => [f.name, f.default !== undefined ? f.default : ""])),
+    ...(initialValues || {}),
+  });
   const [status, setStatus] = useState("idle"); // idle | loading | success | error
   const [errMsg, setErrMsg] = useState("");
   // Opciones que vienen de la base (aseguradoras, productos): el formulario
@@ -967,6 +973,18 @@ function CreateModal({ title, fields, resource, onClose, onCreated }) {
         <div className="space-y-3">
           {fields.map((f) => (
             <div key={f.name}>
+              {f.type === "checkbox" ? (
+                <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={!!values[f.name]}
+                    onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.checked }))}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-400"
+                  />
+                  {f.label}
+                </label>
+              ) : (
+              <>
               <label className="mb-1 block text-xs font-medium text-slate-500">{f.label}</label>
               {f.type === "select" || f.loadOptions ? (
                 <select
@@ -986,6 +1004,8 @@ function CreateModal({ title, fields, resource, onClose, onCreated }) {
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
                 />
               )}
+              </>
+              )}
             </div>
           ))}
         </div>
@@ -995,10 +1015,10 @@ function CreateModal({ title, fields, resource, onClose, onCreated }) {
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
         >
           {status === "loading" ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-          Crear
+          {submitLabel || "Crear"}
         </button>
-        {status === "success" && <p className="mt-2 text-center text-xs text-emerald-600">Creado correctamente.</p>}
-        {status === "error" && <p className="mt-2 text-center text-xs text-red-500">No se pudo crear: {errMsg}</p>}
+        {status === "success" && <p className="mt-2 text-center text-xs text-emerald-600">{successLabel || "Creado correctamente."}</p>}
+        {status === "error" && <p className="mt-2 text-center text-xs text-red-500">No se pudo guardar: {errMsg}</p>}
         {!N8N_APP_WEB_URL && <p className="mt-2 text-center text-xs text-amber-600">VITE_N8N_APP_WEB_URL no configurado — este formulario no puede llegar a n8n.</p>}
       </div>
     </div>
@@ -1026,7 +1046,7 @@ function SiniestrosPage() {
   });
 
   // Avisa al cliente por WhatsApp en qué va su siniestro, usando el mismo
-  // canal que Nai (W8 → send-message → Evolution). El panel no envía nada
+  // canal que Noe (W8 → send-message → Evolution). El panel no envía nada
   // por su cuenta.
   async function notificarCliente() {
     if (!selected?.telefono) return;
@@ -1087,7 +1107,7 @@ function SiniestrosPage() {
       <SectionHero
         icon={AlertTriangle}
         title="Centro de Siniestros"
-        subtitle={live ? "Datos en vivo desde Supabase (tabla claims)." : "Listado de siniestros (claims list) supervisado por Nai."}
+        subtitle={live ? "Datos en vivo desde Supabase (tabla claims)." : "Listado de siniestros (claims list) supervisado por Noe."}
         right={<PrimaryButton icon={Plus} onClick={() => setShowCreate(true)}>Crear Nuevo Siniestro</PrimaryButton>}
       />
       {err && <p className="mb-3 text-xs text-red-500">No se pudo leer claims: {err}</p>}
@@ -1419,7 +1439,7 @@ function CotizacionesPage() {
                   <th className="px-4 py-3 font-medium">Precio Anual</th>
                   <th className="px-4 py-3 font-medium">Cobertura</th>
                   <th className="px-4 py-3 font-medium">Comisión</th>
-                  <th className="px-4 py-3 font-medium">Puntuación Nai</th>
+                  <th className="px-4 py-3 font-medium">Puntuación Noe</th>
                   <th className="px-4 py-3 font-medium">Recomendación</th>
                   <th className="px-4 py-3 font-medium">Elegir</th>
                 </tr>
@@ -1476,7 +1496,7 @@ function CotizacionesPage() {
         </div>
 
         <div className="space-y-4 md:col-span-3">
-          <Card title="Nota interna de Nai (sugerencia, no la decisión)" icon={Sparkles}>
+          <Card title="Nota interna de Noe (sugerencia, no la decisión)" icon={Sparkles}>
             {quote?.recommendation ? (
               <>
                 <p className="whitespace-pre-line text-xs text-slate-600">{quote.recommendation}</p>
@@ -1487,11 +1507,11 @@ function CotizacionesPage() {
                 </p>
               </>
             ) : (
-              <p className="text-xs text-slate-500">Nai todavía no ha dejado una nota para esta cotización.</p>
+              <p className="text-xs text-slate-500">Noe todavía no ha dejado una nota para esta cotización.</p>
             )}
           </Card>
           <Card title="Timeline de Cotización" icon={Clock}>
-            {["Solicitud Recibida · Nai", "Cotizaciones Generadas · Nai", "Comparación Activa · Usuario", "Propuesta Seleccionada · Automatización", "Cierre"].map((t, i) => (
+            {["Solicitud Recibida · Noe", "Cotizaciones Generadas · Noe", "Comparación Activa · Usuario", "Propuesta Seleccionada · Automatización", "Cierre"].map((t, i) => (
               <div key={i} className="flex items-center gap-2 py-1 text-xs text-slate-500">
                 <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-semibold text-blue-600">{i + 1}</span>
                 {t}
@@ -1609,8 +1629,8 @@ function ReportesPage() {
         </div>
 
         <div className="space-y-5 md:col-span-4">
-          <Card title="Inteligencia del Agente Nai" icon={Bot}>
-            <p className="text-xs text-slate-500">Nai no ha detectado anomalías todavía — necesita datos de comisiones reales para analizar.</p>
+          <Card title="Inteligencia del Agente Noe" icon={Bot}>
+            <p className="text-xs text-slate-500">Noe no ha detectado anomalías todavía — necesita datos de comisiones reales para analizar.</p>
           </Card>
 
           <Card title="Integraciones n8n &amp; WaAPI" icon={Zap}>
@@ -1618,7 +1638,7 @@ function ReportesPage() {
           </Card>
 
           <Card title="Timeline de Cobranza" icon={Clock}>
-            {["Factura Generada · Nai", "Notificación WaAPI · Nai", "Pago Próximo · Amarillo", "Pago Vencido · Rojo", "Recuperación · Automatización"].map((t, i) => (
+            {["Factura Generada · Noe", "Notificación WaAPI · Noe", "Pago Próximo · Amarillo", "Pago Vencido · Rojo", "Recuperación · Automatización"].map((t, i) => (
               <div key={i} className="flex items-center justify-between py-1.5 text-xs text-slate-500">
                 <span className="flex items-center gap-2">
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-blue-100 text-[10px] font-semibold text-blue-600">{i + 1}</span>
@@ -1636,7 +1656,11 @@ function ReportesPage() {
 // `onAdd` es opcional a propósito: si una tabla no tiene forma real de crear
 // registros desde el panel (cobranzas y comisiones las genera n8n al emitir una
 // póliza), no se pinta un botón que no haría nada.
-function TablePage({ title, subtitle, columns, rows, badgeCol, onAdd, addLabel = "Añadir", note, icon }) {
+// `rawRows` + `onRowAction` son opcionales y van de la mano: `rawRows[i]` es
+// el registro original de Supabase (con su id/foreign keys reales) para la
+// fila `i` de `rows` (que ya viene formateada para mostrar) — así un botón
+// de acción puede operar sobre el dato real sin que la tabla lo muestre.
+function TablePage({ title, subtitle, columns, rows, badgeCol, onAdd, addLabel = "Añadir", note, icon, rawRows, onRowAction, rowActionLabel = "Editar" }) {
   return (
     <div>
       <SectionHero icon={icon} title={title} subtitle={subtitle} right={onAdd ? <PrimaryButton icon={Plus} onClick={onAdd}>{addLabel}</PrimaryButton> : null} />
@@ -1649,6 +1673,7 @@ function TablePage({ title, subtitle, columns, rows, badgeCol, onAdd, addLabel =
           <thead>
             <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wide text-slate-400">
               {columns.map((c) => <th key={c} className="px-4 py-3 font-medium">{c}</th>)}
+              {onRowAction && <th className="px-4 py-3 font-medium"></th>}
             </tr>
           </thead>
           <tbody>
@@ -1659,6 +1684,16 @@ function TablePage({ title, subtitle, columns, rows, badgeCol, onAdd, addLabel =
                     {columns[j] === badgeCol ? <StatusBadge status={v} /> : v}
                   </td>
                 ))}
+                {onRowAction && (
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => onRowAction(rawRows[i])}
+                      className="rounded-lg px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                    >
+                      {rowActionLabel}
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -1844,10 +1879,16 @@ function PolizasPage() {
   );
 }
 
+// Feature A del pendiente de Cobranzas (NEXT_STEPS.md 2026-09-10): antes solo
+// se podía VER esta tabla, no actuar sobre ella. `showEditor` es null (cerrado),
+// "new" (alta) o la fila cruda de Supabase que se está editando.
 function CobranzasPage() {
   const [rows, setRows] = useState(COLLECTIONS);
+  const [rawRows, setRawRows] = useState([]);
   const [live, setLive] = useState(false);
   const [err, setErr] = useState("");
+  const [showEditor, setShowEditor] = useState(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
@@ -1856,13 +1897,14 @@ function CobranzasPage() {
       // R029: filtrar por status pendiente/vencido -- sin esto, pagos ya
       // saldados (paid/waived) con due_date antiguo ordenaban primero y
       // podían desplazar a los realmente pendientes fuera del limit(50).
-      .select("id, amount, currency, due_date, status, contacts(name, phone), policies(policy_number)")
+      .select("id, policy_id, amount, currency, due_date, status, nota_nairobi, contacts(id, name, phone, metadata), policies(policy_number)")
       .in("status", ["pending", "overdue"])
       .order("due_date", { ascending: true })
       .limit(50)
       .then(({ data, error }) => {
         if (error) { setErr(error.message); return; }
         if (data) {
+          setRawRows(data);
           setRows(data.map((p) => ({
             cliente: p.contacts?.name || p.contacts?.phone || "—",
             poliza: p.policies?.policy_number || "—",
@@ -1879,18 +1921,57 @@ function CobranzasPage() {
           setLive(true);
         }
       });
-  }, []);
+  }, [reloadTick]);
+
+  const paymentFields = [
+    { name: "policy_id", label: "Póliza", loadOptions: { table: "policies", valueCol: "id", labelCol: "policy_number" } },
+    { name: "amount", label: "Monto", type: "number", placeholder: "0.00" },
+    { name: "currency", label: "Moneda", type: "select", options: ["USD", "VES"], default: "USD" },
+    { name: "due_date", label: "Fecha de vencimiento", type: "date" },
+    { name: "nota_nairobi", label: "Nota para Noe (opcional)", placeholder: "Ej. \"esperar hasta el 20, cliente avisó que paga tarde\"" },
+    { name: "do_not_disturb", label: "Pausar recordatorios automáticos a este cliente", type: "checkbox", default: false },
+  ];
 
   return (
-    <TablePage
-      icon={DollarSign}
-      title="Cobranzas"
-      subtitle={live ? "Datos en vivo desde Supabase (tabla payments)." : err ? `No se pudo leer payments: ${err}` : "Pagos próximos y vencidos con recordatorios automáticos por WhatsApp."}
-      columns={["Cliente", "Póliza", "Monto", "Vence", "Estado"]}
-      badgeCol="Estado"
-      rows={rows}
-      note="Los cobros no se crean a mano: n8n los genera al emitir una póliza, según su frecuencia de pago."
-    />
+    <>
+      {showEditor && (
+        <CreateModal
+          title={showEditor === "new" ? "Nuevo cobro" : "Editar cobro"}
+          resource="payment-create"
+          submitLabel={showEditor === "new" ? "Crear" : "Guardar cambios"}
+          successLabel={showEditor === "new" ? "Creado correctamente." : "Guardado correctamente."}
+          fields={paymentFields}
+          initialValues={showEditor === "new" ? {} : {
+            payment_id: showEditor.id,
+            policy_id: showEditor.policy_id,
+            amount: showEditor.amount,
+            currency: showEditor.currency,
+            due_date: showEditor.due_date,
+            nota_nairobi: showEditor.nota_nairobi || "",
+            // El checkbox refleja/escribe contacts.metadata.do_not_disturb (no una
+            // columna de payments) -- W6 (cobranzas automáticas) ya respeta este
+            // flag para excluir a la persona de los recordatorios programados.
+            do_not_disturb: !!showEditor.contacts?.metadata?.do_not_disturb,
+          }}
+          onClose={() => setShowEditor(null)}
+          onCreated={() => setReloadTick((t) => t + 1)}
+        />
+      )}
+      <TablePage
+        icon={DollarSign}
+        title="Cobranzas"
+        subtitle={live ? "Datos en vivo desde Supabase (tabla payments)." : err ? `No se pudo leer payments: ${err}` : "Pagos próximos y vencidos con recordatorios automáticos por WhatsApp."}
+        columns={["Cliente", "Póliza", "Monto", "Vence", "Estado"]}
+        badgeCol="Estado"
+        rows={rows}
+        rawRows={rawRows}
+        onAdd={() => setShowEditor("new")}
+        addLabel="Nuevo cobro"
+        onRowAction={(raw) => setShowEditor(raw)}
+        rowActionLabel="Editar"
+        note="Los cobros se generan automáticamente al emitir una póliza (según su frecuencia de pago) — también podés agregar o ajustar uno puntual acá. La nota para Noe la lee antes de hablar de ese cobro con el cliente. “Pausar recordatorios” apaga los mensajes automáticos de cobranza para ese cliente en todas sus cuotas, hasta que lo destildes."
+      />
+    </>
   );
 }
 
@@ -2000,7 +2081,7 @@ function AseguradorasPage() {
 
   // La afiliación se escribe vía n8n (recurso insurer-status de W8), nunca
   // directo a Supabase. El cotizador (W3) solo consulta las que quedan en
-  // status='active', así que este toggle decide con quién cotiza Nai.
+  // status='active', así que este toggle decide con quién cotiza Noe.
   async function toggleAfiliacion(ins) {
     const nuevo = ins.status === "active" ? "pending" : "active";
     setSaving(ins.id);
@@ -2008,7 +2089,7 @@ function AseguradorasPage() {
     try {
       const res = await callAppWebApi("insurer-status", { insurer_id: ins.id, status: nuevo });
       if (res.ok === false) throw new Error(res.error || "n8n rechazó el cambio");
-      setAviso(`${ins.name}: ${nuevo === "active" ? "afiliación activada — Nai ya cotiza con ella" : "afiliación pausada — Nai deja de cotizar con ella"}.`);
+      setAviso(`${ins.name}: ${nuevo === "active" ? "afiliación activada — Noe ya cotiza con ella" : "afiliación pausada — Noe deja de cotizar con ella"}.`);
       setReloadTick((t) => t + 1);
     } catch (e) {
       setAviso(`No se pudo actualizar ${ins.name}: ${e.message}`);
@@ -2024,7 +2105,7 @@ function AseguradorasPage() {
       <SectionHero
         icon={Building2}
         title="Aseguradoras"
-        subtitle={live ? `${activas} de ${rows.length} con afiliación activa. Nai solo cotiza con las activas.` : err ? `No se pudo leer insurers: ${err}` : "Compañías conectadas y su rendimiento en la operación."}
+        subtitle={live ? `${activas} de ${rows.length} con afiliación activa. Noe solo cotiza con las activas.` : err ? `No se pudo leer insurers: ${err}` : "Compañías conectadas y su rendimiento en la operación."}
       />
       {aviso && <p className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-inset ring-slate-200">{aviso}</p>}
       {rows.length === 0 ? (
@@ -2238,7 +2319,7 @@ function SystemStatusCard() {
   if (!isSupabaseConfigured) return null;
 
   return (
-    <Card title="Estado real de Nai (n8n)" icon={Bot}>
+    <Card title="Estado real de Noe (n8n)" icon={Bot}>
       <div className="space-y-2.5 text-sm">
         <div className="flex items-center justify-between">
           <span className="text-slate-600">Modo</span>
@@ -2263,7 +2344,7 @@ function SystemStatusCard() {
   );
 }
 
-// Números de familiares y conocidos que Nai debe ignorar por completo. W1 los
+// Números de familiares y conocidos que Noe debe ignorar por completo. W1 los
 // consulta en el prefiltro, ANTES de llamar al modelo: un número aquí no gasta
 // ni un token, y el texto de esos mensajes se guarda redactado.
 // Lectura directa de Supabase (RLS permite SELECT a authenticated); la
@@ -2316,9 +2397,9 @@ function NumerosPrivadosCard() {
   }
 
   return (
-    <Card title="Números privados (Nai los ignora)" icon={WifiOff}>
+    <Card title="Números privados (Noe los ignora)" icon={WifiOff}>
       <p className="mb-3 text-xs text-slate-500">
-        Familiares y conocidos que escriben por temas personales. Nai no lee ni responde
+        Familiares y conocidos que escriben por temas personales. Noe no lee ni responde
         esos chats, y no gasta nada en procesarlos. Escribe el número como lo tienes en
         la agenda: <code className="rounded bg-slate-100 px-1 py-0.5">0412-4248369</code>.
       </p>
@@ -2349,7 +2430,7 @@ function NumerosPrivadosCard() {
         {cargando && <p className="text-xs text-slate-400">Cargando…</p>}
         {!cargando && numeros.length === 0 && (
           <p className="text-xs text-slate-400">
-            La lista está vacía: Nai evalúa todos los números que le escriben.
+            La lista está vacía: Noe evalúa todos los números que le escriben.
           </p>
         )}
         {numeros.map((n) => (
@@ -2517,7 +2598,7 @@ function ConfiguracionPage() {
             <p className="text-xs text-slate-500">Cada módulo de Nairobi OS despacha eventos al webhook de n8n configurado arriba, siguiendo el esquema <code className="rounded bg-slate-100 px-1 py-0.5">nairobi_os_core_schema_v1</code>. Los flujos sugeridos:</p>
             <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-slate-600 sm:grid-cols-2">
               {[
-                "Nuevo mensaje de WhatsApp → clasificación de Nai → creación de conversación",
+                "Nuevo mensaje de WhatsApp → clasificación de Noe → creación de conversación",
                 "Cotización solicitada → comparación multi-aseguradora → envío de propuesta",
                 "Siniestro reportado → checklist de documentación → notificación al cliente",
                 "Pago próximo a vencer → recordatorio automático → escalamiento si vence",
@@ -2532,7 +2613,7 @@ function ConfiguracionPage() {
           <SystemStatusCard />
           <Card title="Config. de este panel (opcional)" icon={CircleDot}>
             <p className="mb-2 text-[11px] text-slate-400">
-              No es el estado real del backend — eso está arriba, en "Estado real de Nai". Esto
+              No es el estado real del backend — eso está arriba, en "Estado real de Noe". Esto
               solo refleja si llenaste los campos de esta pantalla para el evento config-update.
             </p>
             <div className="space-y-2.5 text-sm">

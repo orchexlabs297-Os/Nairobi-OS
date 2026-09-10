@@ -107,7 +107,7 @@ create policy "Panel: lectura authenticated de daily_metrics"
 
 -- ============================================================================
 -- AÑADIDO 2026-08-25 — lectura de settings y system_errors, pedida
--- explícitamente para el panel "Estado real de Nai" en Configuración
+-- explícitamente para el panel "Estado real de Noe" en Configuración
 -- (MensajesPage/ConfiguracionPage, sesión de n8n). settings solo trae
 -- mode/test_allowlist (nada sensible); system_errors puede traer teléfonos
 -- en su payload, pero el panel ya está detrás de Supabase Auth.
