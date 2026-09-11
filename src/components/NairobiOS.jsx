@@ -79,6 +79,10 @@ const APPT_STATUS_LABEL = {
 const COMMISSION_STATUS_LABEL = {
   accrued: "En Proceso", invoiced: "Próximo", collected: "Activo", cancelled: "Vencido",
 };
+// public.reminders.status — los 4 valores del CHECK de la tabla.
+const REMINDER_STATUS_LABEL = {
+  pending: "Próximo", sent: "Resuelto", skipped: "Vencido", failed: "Vencido",
+};
 
 /* --------------------------------- HELPERS --------------------------------- */
 
@@ -667,7 +671,15 @@ function MensajesPage() {
       // orden de lectura de arriba a abajo no cambie.
       .order("created_at", { foreignTable: "messages", ascending: false })
       .limit(50, { foreignTable: "messages" })
-      .limit(30)
+      // 2026-09-11: el limite era 30 y el orden, la fecha de CREACION de la
+      // conversacion -- no la de su ultimo mensaje. Medido contra la base real:
+      // habia 40 conversaciones y el chat propio con Nairobi (584143732940, 86
+      // mensajes, el que se usa en las demos) era el numero 37: quedaba fuera de
+      // la bandeja, o sea que desde el panel no habia forma de verlo ni de
+      // pausarlo/reactivarlo. Se sube el limite y se reordena por actividad real
+      // en JS, porque conversations.last_message_at esta en NULL en toda la tabla
+      // (nadie lo escribe) y no sirve para ordenar del lado de Postgres.
+      .limit(200)
       .then(({ data, error }) => {
         setLoading(false);
         if (error) { setErr(error.message); return; }
@@ -677,12 +689,20 @@ function MensajesPage() {
         const mapped = (verTodas ? data : negocio).map((c) => {
           const msgs = [...(c.messages || [])].reverse();
           const last = msgs[msgs.length - 1];
+          // metadata.paused_until lo escribe W1 cuando Nairobi contesta a mano
+          // por WhatsApp (pausa de 60 min que vence sola). El apagado desde este
+          // panel no lo escribe: ese es permanente hasta que ella lo reactive.
+          // Sin distinguirlos, "Noe en pausa" no dice si hay que hacer algo.
+          const pausaHasta = c.metadata?.paused_until ? new Date(c.metadata.paused_until) : null;
+          const pausaVigente = pausaHasta && !Number.isNaN(pausaHasta.getTime()) && pausaHasta > new Date();
           return {
             id: c.id,
             cliente: c.contacts?.phone ? `+${c.contacts.phone}` : "Cliente",
             telefono: c.contacts?.phone || "—",
             estado: c.status === "active" ? "Activo" : c.status === "resolved" ? "Resuelto" : c.status || "Nuevo",
             should_respond: c.should_respond !== false,
+            pausaHasta: pausaVigente ? pausaHasta : null,
+            ultimaActividad: new Date(last?.created_at || c.created_at).getTime(),
             hora: last?.created_at ? new Date(last.created_at).toLocaleTimeString() : "",
             resumen: last?.message_text ? last.message_text.slice(0, 60) : "Sin mensajes todavía",
             thread: msgs.map((m) => ({
@@ -694,6 +714,8 @@ function MensajesPage() {
             })),
           };
         });
+        // Orden real de bandeja: lo ultimo que se movio, arriba.
+        mapped.sort((a, b) => b.ultimaActividad - a.ultimaActividad);
         setConversations(mapped);
         setSelected((prev) => mapped.find((m) => m.id === prev?.id) || mapped[0] || null);
         setLive(true);
@@ -784,7 +806,11 @@ function MensajesPage() {
                 <div className="mt-1.5 flex items-center gap-1.5">
                   <StatusBadge status={c.estado} />
                   {!c.should_respond && (
-                    <span className="text-[10px] font-medium text-amber-600">Noe en pausa</span>
+                    <span className="text-[10px] font-medium text-amber-600">
+                      {c.pausaHasta
+                        ? `Noe en pausa · vuelve ${c.pausaHasta.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                        : "Noe en pausa"}
+                    </span>
                   )}
                 </div>
               </button>
@@ -804,7 +830,11 @@ function MensajesPage() {
                 <p className="text-sm font-semibold text-white">{selected.cliente}</p>
                 <p className="flex items-center gap-1.5 text-xs text-sky-100">
                   <span className={`h-1.5 w-1.5 rounded-full ${selected.should_respond ? "bg-emerald-400" : "bg-amber-400"}`} />
-                  {selected.should_respond ? "Activo" : "Noe en pausa"}
+                  {selected.should_respond
+                    ? "Activo"
+                    : selected.pausaHasta
+                      ? `Noe en pausa · vuelve sola a las ${selected.pausaHasta.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                      : "Noe en pausa"}
                 </p>
               </div>
               <MoreVertical size={16} className="text-white/70" />
@@ -897,7 +927,9 @@ function MensajesPage() {
             <p className="mt-2 text-[11px] text-slate-400">
               {selected.should_respond
                 ? "Noe responde automáticamente en esta conversación."
-                : "Noe está en pausa aquí — solo tú puedes responder hasta que la reactives."}
+                : selected.pausaHasta
+                  ? `Le contestaste a mano por WhatsApp, así que Noe se apartó de esta conversación. Vuelve sola a las ${selected.pausaHasta.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}, o la reactivás ya con el interruptor.`
+                  : "Noe está en pausa aquí — solo tú puedes responder hasta que la reactives con el interruptor."}
             </p>
             {!N8N_APP_WEB_URL && (
               <p className="mt-2 text-[11px] text-amber-600">VITE_N8N_APP_WEB_URL no está configurado — el toggle no puede llegar a n8n.</p>
@@ -930,11 +962,21 @@ function CreateModal({ title, fields, resource, onClose, onCreated, initialValue
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     for (const f of fields.filter((x) => x.loadOptions)) {
-      const { table, valueCol, labelCol, eq } = f.loadOptions;
-      let qb = supabase.from(table).select(`${valueCol}, ${labelCol}`).order(labelCol);
+      const { table, valueCol, labelCol, labelAltCol, eq } = f.loadOptions;
+      // labelAltCol existe para contactos: muchos no tienen `name` cargado y un
+      // <select> lleno de opciones en blanco es inusable. Se muestra el nombre y,
+      // si hay teléfono, se agrega para poder distinguir homónimos.
+      const cols = [valueCol, labelCol, labelAltCol].filter(Boolean).join(", ");
+      let qb = supabase.from(table).select(cols).order(labelCol);
       if (eq) qb = qb.eq(eq[0], eq[1]);
       qb.then(({ data }) => {
-        const opts = (data || []).map((r) => ({ value: r[valueCol], label: r[labelCol] }));
+        const opts = (data || []).map((r) => {
+          const principal = r[labelCol];
+          const alt = labelAltCol ? r[labelAltCol] : null;
+          let label = principal || alt || r[valueCol];
+          if (principal && alt) label = `${principal} · ${alt}`;
+          return { value: r[valueCol], label };
+        });
         setRemote((m) => ({ ...m, [f.name]: opts }));
         if (opts.length) setValues((v) => (v[f.name] ? v : { ...v, [f.name]: opts[0].value }));
       });
@@ -1971,8 +2013,99 @@ function CobranzasPage() {
         rowActionLabel="Editar"
         note="Los cobros se generan automáticamente al emitir una póliza (según su frecuencia de pago) — también podés agregar o ajustar uno puntual acá. La nota para Noe la lee antes de hablar de ese cobro con el cliente. “Pausar recordatorios” apaga los mensajes automáticos de cobranza para ese cliente en todas sus cuotas, hasta que lo destildes."
       />
+      <RecordatoriosBlock />
     </>
   );
+}
+
+// Pedido de Sebastián (2026-09-11): Nairobi tiene que poder decirle a Noe a qué
+// cliente recordarle y en qué fecha, sin depender de que la póliza ya esté
+// cargada en el sistema. Un "cobro" de la tabla de arriba no sirve para eso:
+// payments.policy_id es NOT NULL, así que un cliente sin póliza registrada no
+// admite ninguna cuota. Esto escribe en public.reminders con kind='custom', que
+// W6 (el cron de cobranzas, cada 5 minutos) ya sabe enviar con texto literal.
+function RecordatoriosBlock() {
+  const [rows, setRows] = useState([]);
+  const [rawRows, setRawRows] = useState([]);
+  const [err, setErr] = useState("");
+  const [showEditor, setShowEditor] = useState(null);
+  const [reloadTick, setReloadTick] = useState(0);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase
+      .from("reminders")
+      .select("id, kind, scheduled_for, sent_at, status, message_text, contacts(id, name, phone)")
+      .eq("kind", "custom")
+      .order("scheduled_for", { ascending: true })
+      .limit(50)
+      .then(({ data, error }) => {
+        if (error) { setErr(error.message); return; }
+        setRawRows(data || []);
+        setRows((data || []).map((r) => ({
+          cliente: r.contacts?.name || r.contacts?.phone || "—",
+          cuando: r.scheduled_for ? new Date(r.scheduled_for).toLocaleString() : "—",
+          mensaje: r.message_text ? (r.message_text.length > 70 ? `${r.message_text.slice(0, 70)}…` : r.message_text) : "—",
+          estado: REMINDER_STATUS_LABEL[r.status] || r.status,
+        })));
+      });
+  }, [reloadTick]);
+
+  const editando = showEditor && showEditor !== "new";
+  const campos = [
+    { name: "contact_id", label: "Cliente", loadOptions: { table: "contacts", valueCol: "id", labelCol: "name", labelAltCol: "phone" } },
+    { name: "scheduled_for", label: "Cuándo recordarle", type: "datetime-local" },
+    { name: "message_text", label: "Mensaje (opcional)", placeholder: "Si lo dejás vacío, se manda el recordatorio de pago estándar." },
+  ];
+  if (editando) campos.push({ name: "cancel", label: "Cancelar este recordatorio", type: "checkbox", default: false });
+
+  return (
+    <div className="mt-8">
+      {showEditor && (
+        <CreateModal
+          title={editando ? "Editar recordatorio" : "Programar recordatorio"}
+          resource="reminder-create"
+          submitLabel={editando ? "Guardar cambios" : "Programar"}
+          successLabel={editando ? "Guardado correctamente." : "Recordatorio programado."}
+          fields={campos}
+          initialValues={editando ? {
+            reminder_id: showEditor.id,
+            contact_id: showEditor.contacts?.id || "",
+            // <input type="datetime-local"> necesita "YYYY-MM-DDTHH:mm" en hora
+            // local; el valor guardado es un timestamptz en UTC.
+            scheduled_for: showEditor.scheduled_for ? toLocalDateTimeInput(showEditor.scheduled_for) : "",
+            message_text: showEditor.message_text || "",
+            cancel: false,
+          } : {}}
+          onClose={() => setShowEditor(null)}
+          onCreated={() => setReloadTick((t) => t + 1)}
+        />
+      )}
+      <TablePage
+        icon={Bell}
+        title="Recordatorios programados"
+        subtitle={err ? `No se pudo leer reminders: ${err}` : "Los que vos programás a mano, aparte de los automáticos de la tabla de arriba."}
+        columns={["Cliente", "Cuándo", "Mensaje", "Estado"]}
+        badgeCol="Estado"
+        rows={rows}
+        rawRows={rawRows}
+        onAdd={() => setShowEditor("new")}
+        addLabel="Programar recordatorio"
+        onRowAction={(raw) => setShowEditor(raw)}
+        rowActionLabel="Editar"
+        note="Elegí el cliente y el día/hora: Noe le escribe por WhatsApp en ese momento. Sirve aunque el cliente todavía no tenga una póliza cargada. Si no escribís mensaje, se manda el recordatorio de pago estándar. Para cancelar uno, abrilo con “Editar” y tildá “Cancelar este recordatorio”."
+      />
+    </div>
+  );
+}
+
+// El valor guardado es un timestamptz; <input type="datetime-local"> espera
+// "YYYY-MM-DDTHH:mm" sin zona, en hora local del navegador.
+function toLocalDateTimeInput(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function CitasPage() {
