@@ -1343,6 +1343,24 @@ function QuoteCreateModal({ onClose, onCreated }) {
   );
 }
 
+// Prima legible para Nairobi y para el mensaje al cliente. W3 guarda la prima ya
+// convertida (VES cuando la tarifa oficial del RCV, que está en EUR, se pasa por la
+// tasa BCV) y deja la conversión en coverage_items.pricing; quotes.currency lleva la
+// misma moneda. Si no hay pricing (cotizaciones viejas), se usa la moneda de la quote.
+function formatPrima(line, quoteCurrency) {
+  const pricing = line?.coverage_items?.pricing || {};
+  const currency = (pricing.currency || quoteCurrency || "USD").trim();
+  const premium = Number(line?.premium);
+  if (line?.premium == null || !Number.isFinite(premium)) return "—";
+  const fmt = (n, dec = 2) => n.toLocaleString("es-VE", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  if (currency === "VES") {
+    const usd = Number(pricing.premium_usd);
+    return `Bs ${fmt(premium)}${Number.isFinite(usd) ? ` (aprox. $${fmt(usd)})` : ""}`;
+  }
+  if (currency === "EUR") return `€${fmt(premium)}`;
+  return `$${fmt(premium)}`;
+}
+
 function CotizacionesPage() {
   const [quotes, setQuotes] = useState([]);
   const [quote, setQuote] = useState(null);
@@ -1361,7 +1379,7 @@ function CotizacionesPage() {
       // quote_lines!quote_lines_quote_id_fkey desambigua: hay dos relaciones
       // entre quotes y quote_lines (quote_lines.quote_id → quotes.id, y
       // quotes.best_line_id → quote_lines.id) y PostgREST no puede elegir sola.
-      .select("id, status, created_at, recommendation, contacts(name, phone), products(name), quote_lines!quote_lines_quote_id_fkey(id, premium, coverage_sum, commission_pct, rank, unavailable_reason, insurers(name))")
+      .select("id, status, currency, created_at, recommendation, contacts(name, phone), products(name), quote_lines!quote_lines_quote_id_fkey(id, premium, coverage_sum, coverage_items, commission_pct, rank, unavailable_reason, insurers(name))")
       .order("created_at", { ascending: false })
       .limit(25)
       .then(({ data, error }) => {
@@ -1380,7 +1398,12 @@ function CotizacionesPage() {
         id: l.id,
         key: String.fromCharCode(65 + i),
         name: l.insurers?.name || "—",
-        price: `$${l.premium}`,
+        // 2026-09-11: la prima del RCV viene convertida a bolívares por W3 (tasa BCV
+        // del día) y la conversión viaja en coverage_items.pricing. Antes se mostraba
+        // "$108758.78" — un monto en Bs con signo de dólar — y ese mismo texto era el
+        // que "Elegir esta y enviar" le mandaba al cliente por WhatsApp.
+        price: formatPrima(l, quote?.currency),
+        priceValue: l.coverage_items?.pricing?.premium_usd ?? Number(l.premium) ?? 0,
         coverage: l.coverage_sum ? `$${l.coverage_sum}` : "—",
         commission: l.commission_pct ? `${l.commission_pct}%` : "—",
         score: Math.max(0, 100 - i * 8),
@@ -1400,7 +1423,9 @@ function CotizacionesPage() {
     setEnviandoKey(elegida.key);
     setEnvio("Enviando…");
     try {
-      const texto = `Hola${quote.contacts?.name ? " " + quote.contacts.name : ""}, te comparto la opción que elegí para tu ${quote.products?.name || "seguro"}: ${elegida.name} por ${elegida.price} al año, con cobertura de ${elegida.coverage}. ¿Te la reservo?`;
+      // El RCV regulado no trae suma asegurada en la tarifa: no mandar "cobertura de —".
+      const cobertura = elegida.coverage && elegida.coverage !== "—" ? `, con cobertura de ${elegida.coverage}` : "";
+      const texto = `Hola${quote.contacts?.name ? " " + quote.contacts.name : ""}, te comparto la opción que elegí para tu ${quote.products?.name || "seguro"}: ${elegida.name} por ${elegida.price} al año${cobertura}. ¿Te la reservo?`;
       const res = await callAppWebApi("send-message", { chat_id: quote.contacts.phone, message: texto });
       if (res?.ok) {
         setEnvio(`Propuesta de ${elegida.name} enviada al cliente por WhatsApp.`);
@@ -1430,7 +1455,7 @@ function CotizacionesPage() {
     }
   }
 
-  const chartData = lines.map((q) => ({ name: q.name, Precio: parseInt(q.price.replace("$", "")) || 0, Cobertura: q.score }));
+  const chartData = lines.map((q) => ({ name: q.name, Precio: Math.round(Number(q.priceValue) || 0), Cobertura: q.score }));
   return (
     <div>
       {showCreate && <QuoteCreateModal onClose={() => setShowCreate(false)} onCreated={() => setReloadTick((t) => t + 1)} />}
