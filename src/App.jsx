@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, LogOut } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "./lib/supabaseClient.js";
 import Login from "./components/Login.jsx";
-import NairobiOS from "./components/NairobiOS.jsx";
+import CobrosApp from "./components/CobrosApp.jsx";
 
 const ALLOW_DEMO = import.meta.env.VITE_ALLOW_DEMO === "true";
 
@@ -27,8 +27,8 @@ export default function App() {
 
   if (checking) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
-        <Loader2 size={22} className="animate-spin text-blue-600" />
+      <div style={{ height: "100%", display: "grid", placeItems: "center", background: "var(--tinta)" }}>
+        <Loader2 size={24} className="girando" color="#d9bc8c" />
       </div>
     );
   }
@@ -40,8 +40,7 @@ export default function App() {
   }
 
   return (
-    <NairobiOS
-      session={session}
+    <CobrosApp
       onSignOut={async () => {
         if (isSupabaseConfigured) await supabase.auth.signOut();
         setSession(null);
